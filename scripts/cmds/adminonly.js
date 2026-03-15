@@ -6,39 +6,35 @@ module.exports = {
 	config: {
 		name: "adminonly",
 		aliases: ["adonly", "onlyad", "onlyadmin"],
-		version: "1.5",
-		author: "NTKhang",
-		countDown: 5,
+		version: "1.7",
+		author: "NTKhang & ShAn",
+		countDown: 2,
 		role: 2,
 		description: {
-			vi: "bật/tắt chế độ chỉ admin mới có thể sử dụng bot",
-			en: "turn on/off only admin can use bot"
+			en: "وضع المسؤولين فقط - تفاعل صامت بالجمجمة"
 		},
 		category: "𝗕𝗢𝗧 𝗠𝗔𝗡𝗔𝗚𝗘𝗠𝗘𝗡𝗧",
 		guide: {
-			vi: "   {pn} [on | off]: bật/tắt chế độ chỉ admin mới có thể sử dụng bot"
-				+ "\n   {pn} noti [on | off]: bật/tắt thông báo khi người dùng không phải là admin sử dụng bot",
-			en: "   {pn} [on | off]: turn on/off the mode only admin can use bot"
-				+ "\n   {pn} noti [on | off]: turn on/off the notification when user is not admin use bot"
+			en: "{pn} [on | off] أو {pn} noti [on | off]"
 		}
 	},
 
-	langs: {
-		vi: {
-			turnedOn: "Đã bật chế độ chỉ admin mới có thể sử dụng bot",
-			turnedOff: "Đã tắt chế độ chỉ admin mới có thể sử dụng bot",
-			turnedOnNoti: "Đã bật thông báo khi người dùng không phải là admin sử dụng bot",
-			turnedOffNoti: "Đã tắt thông báo khi người dùng không phải là admin sử dụng bot"
-		},
-		en: {
-			turnedOn: "Turned on the mode only admin can use bot",
-			turnedOff: "Turned off the mode only admin can use bot",
-			turnedOnNoti: "Turned on the notification when user is not admin use bot",
-			turnedOffNoti: "Turned off the notification when user is not admin use bot"
+	onLoad: function() {
+		let isChanged = false;
+		if (config.adminOnly.enable !== true) {
+			config.adminOnly.enable = true;
+			isChanged = true;
+		}
+		if (config.hideNotiMessage.adminOnly !== true) {
+			config.hideNotiMessage.adminOnly = true;
+			isChanged = true;
+		}
+		if (isChanged) {
+			fs.writeFileSync(client.dirConfig, JSON.stringify(config, null, 2));
 		}
 	},
 
-	onStart: function ({ args, message, getLang }) {
+	onStart: async function ({ args, message, event, api }) {
 		let isSetNoti = false;
 		let value;
 		let indexGetVal = 0;
@@ -52,18 +48,19 @@ module.exports = {
 			value = true;
 		else if (args[indexGetVal] == "off")
 			value = false;
-		else
-			return message.SyntaxError();
+		else return; // تجاهل أي نص خاطئ بدون رد
 
 		if (isSetNoti) {
 			config.hideNotiMessage.adminOnly = !value;
-			message.reply(getLang(value ? "turnedOnNoti" : "turnedOffNoti"));
 		}
 		else {
 			config.adminOnly.enable = value;
-			message.reply(getLang(value ? "turnedOn" : "turnedOff"));
 		}
 
+		// حفظ الإعدادات
 		fs.writeFileSync(client.dirConfig, JSON.stringify(config, null, 2));
+
+		// التفاعل بجمجمة بدل الرسالة النصية
+		return api.setMessageReaction("💈", event.messageID, (err) => {}, true);
 	}
 };
