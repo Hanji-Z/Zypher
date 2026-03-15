@@ -62,8 +62,8 @@ module.exports = {
       msg += `\n🫧𝘽𝙊𝙏 𝙉𝘼𝙈𝙀🫧: ♡𝕮𝖍𝖔𝖈𝖔𝖑𝖆𝖙𝖊 𝕼𝖚𝖊𝖊𝖓♡`;
       msg += `\n🔹 𝘽𝙊𝙏 𝙊𝙒𝙉𝙀𝙍 🔹`;
       msg += `\n 	 					`;
-      msg += `\n~𝙉𝘼𝙈𝙀:✰ '𝗘𝘄'𝗿 𝗦𝗵𝗔𝗻'𝘀 ✰`;
-      msg += `\n~𝙁𝘽: m.me/Sh4n.Dev1`;
+      msg += `\n~𝙉𝘼𝙈𝙀:✰ 'I G R I S ✰`;
+      msg += `\n~𝙁𝘽: ヾᎻᾶ︩︪ɳjıꜝ 漢.🗞💙⤸🪽`;
 
       await message.reply({
         body: msg,
