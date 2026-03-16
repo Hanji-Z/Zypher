@@ -36,30 +36,46 @@ module.exports = {
 	onStart: async ({ threadsData, message, event, api, getLang }) => {
 		if (event.logMessageType == "log:subscribe")
 			return async function () {
+				// ⬇️⬇️⬇️ إعدادات التحكم ⬇️⬇️⬇️
+				const ENABLE_BOT_WELCOME = false; // false = لا ترسل رسالة ترحيب للبوت
+				const ENABLE_MEMBER_WELCOME = false; // false = لا ترسل رسالة ترحيب للأعضاء
+				// ⬆️⬆️⬆️ إعدادات التحكم ⬆️⬆️⬆️
+				
 				const hours = getTime("HH");
 				const { threadID } = event;
 				const { nickNameBot } = global.GoatBot.config;
 				const prefix = global.utils.getPrefix(threadID);
 				const dataAddedParticipants = event.logMessageData.addedParticipants;
-				// if new member is bot
+				
+				// إذا كان العضو الجديد هو البوت
 				if (dataAddedParticipants.some((item) => item.userFbId == api.getCurrentUserID())) {
 					if (nickNameBot)
 						api.changeNickname(nickNameBot, threadID, api.getCurrentUserID());
-					return message.send(getLang("welcomeMessage", prefix));
+					
+					// التحكم في رسالة البوت
+					if (ENABLE_BOT_WELCOME) {
+						return message.send(getLang("welcomeMessage", prefix));
+					} else {
+						return; // خروج بدون إرسال
+					}
 				}
-				// if new member:
+				
+				// التحكم في رسائل الأعضاء
+				if (!ENABLE_MEMBER_WELCOME) {
+					return; // خروج بدون إرسال رسائل للأعضاء
+				}
+				
+				// إذا وصلنا هنا، هذا يعني أن رسائل الأعضاء مفعلة
+				// ... باقي الكود الأصلي للأعضاء ...
 				if (!global.temp.welcomeEvent[threadID])
 					global.temp.welcomeEvent[threadID] = {
 						joinTimeout: null,
 						dataAddedParticipants: []
 					};
 
-				// push new member to array
 				global.temp.welcomeEvent[threadID].dataAddedParticipants.push(...dataAddedParticipants);
-				// if timeout is set, clear it
 				clearTimeout(global.temp.welcomeEvent[threadID].joinTimeout);
 
-				// set new timeout
 				global.temp.welcomeEvent[threadID].joinTimeout = setTimeout(async function () {
 					const threadData = await threadsData.get(threadID);
 					if (threadData.settings.sendWelcomeMessage == false)
@@ -83,11 +99,7 @@ module.exports = {
 							id: user.userFbId
 						});
 					}
-					// {userName}:   name of new member
-					// {multiple}:
-					// {boxName}:    name of group
-					// {threadName}: name of group
-					// {session}:    session of day
+					
 					if (userName.length == 0) return;
 					let { welcomeMessage = getLang("defaultWelcomeMessage") } =
 						threadData.data;
