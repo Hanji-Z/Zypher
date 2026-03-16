@@ -3,8 +3,8 @@ const { getTime, drive } = global.utils;
 module.exports = {
 	config: {
 		name: "leave",
-		version: "1.4",
-		author: "NTKhang",
+		version: "1.5",
+		author: "NTKhang & ShAn",
 		category: "events"
 	},
 
@@ -32,13 +32,28 @@ module.exports = {
 	onStart: async ({ threadsData, message, event, api, usersData, getLang }) => {
 		if (event.logMessageType == "log:unsubscribe")
 			return async function () {
+				// ⬇️⬇️⬇️ إعدادات التحكم في رسائل المغادرة ⬇️⬇️⬇️
+				const ENABLE_LEAVE_MESSAGES = false; // false = لا ترسل رسائل مغادرة
+				// ⬆️⬆️⬆️ لتشغيل الرسائل، غير false إلى true ⬆️⬆️⬆️
+				
+				// إذا كانت الرسائل معطلة، نخرج مباشرة
+				if (!ENABLE_LEAVE_MESSAGES) {
+					return;
+				}
+				
 				const { threadID } = event;
 				const threadData = await threadsData.get(threadID);
+				
+				// التحقق من الإعدادات القديمة (للتوافق)
 				if (!threadData.settings.sendLeaveMessage)
 					return;
+					
 				const { leftParticipantFbId } = event.logMessageData;
+				
+				// إذا كان الذي غادر هو البوت نفسه، لا ترسل رسالة
 				if (leftParticipantFbId == api.getCurrentUserID())
 					return;
+					
 				const hours = getTime("HH");
 
 				const threadName = threadData.threadName;
@@ -92,6 +107,8 @@ module.exports = {
 						.filter(({ status }) => status == "fulfilled")
 						.map(({ value }) => value);
 				}
+				
+				// إرسال رسالة المغادرة
 				message.send(form);
 			};
 	}
