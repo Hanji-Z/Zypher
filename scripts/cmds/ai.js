@@ -3,30 +3,21 @@ const axios = require("axios");
 module.exports = {
 	config: {
 		name: "ai",
-		version: "2.1",
+		version: "2.2",
 		author: "Gemini",
 		countDown: 5,
 		role: 2,
-		description: {
-			en: "بوت ذكاء اصطناعي فكاهي يعمل بمفتاح Gemini الخاص بك"
-		},
+		description: { en: "AI Chat with Gemini" },
 		category: "AI",
-		guide: {
-			en: "   {pn} on : لتفعيل الرد\n   {pn} off : لإيقاف الرد"
-		}
+		guide: { en: "{pn} on | off" }
 	},
 
 	onStart: async function ({ message, event, args, threadsData }) {
 		const { threadID } = event;
 		const status = args[0]?.toLowerCase();
-
-		if (!["on", "off"].includes(status)) {
-			return message.reply("يا بطل استخدم: ai on أو ai off 🙄");
-		}
-
+		if (!["on", "off"].includes(status)) return message.reply("استخدم: ai on أو ai off");
 		await threadsData.set(threadID, status === "on", "data.aiEnabled");
-		
-		return message.reply(status === "on" ? "تم التفعيل! أنا جاهز لقصف الجبهات 😂" : "تم الإيقاف.. بروح أنام 😴");
+		return message.reply(status === "on" ? "تم التفعيل بنجاح ✅" : "تم الإيقاف ❌");
 	},
 
 	onChat: async function ({ api, event, threadsData, message }) {
@@ -38,32 +29,29 @@ module.exports = {
 		const isAiEnabled = await threadsData.get(threadID, "data.aiEnabled", false);
 		if (!isAiEnabled) return;
 
-		// سيرد فقط إذا قمت بالرد (Reply) على رسالة البوت
+		// الرد فقط عند عمل Reply لرسالة البوت
 		if (!messageReply || messageReply.senderID !== botID) return;
 
-		// مفتاحك الذي أرسلته تم وضعه هنا بأمان
 		const GEMINI_API_KEY = "AIzaSyCJ4oQAoLCdcAx9kN-qd9FQaKzK-Y2Fd6o"; 
 
 		try {
-			api.sendTypingIndicator(threadID);
-
-			const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
-
-			const prompt = `أنت بوت فكاهي ومشاكس في مجموعة تشات. 
-            رد بأسلوب مضحك وساخر "قصف جبهات" وباللهجة المغربية أو الدارجة المفهومة. 
-            لا تكن رسمياً أبداً. الرسالة هي: ${body}`;
+			// تم إزالة sendTypingIndicator لتجنب خطأ 404 الظاهر في الصورة
+			
+			const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`;
 
 			const res = await axios.post(url, {
-				contents: [{ parts: [{ text: prompt }] }]
-			});
+				contents: [{ parts: [{ text: `أنت بوت فكاهي ومشاكس، رد باختصار وبلهجة مغربية مضحكة على: ${body}` }] }]
+			}, {
+                headers: { 'Content-Type': 'application/json' }
+            });
 
-			const response = res.data.candidates[0].content.parts[0].text;
-
-			if (response) {
+			if (res.data && res.data.candidates && res.data.candidates[0].content) {
+				const response = res.data.candidates[0].content.parts[0].text;
 				return message.reply(response);
 			}
 		} catch (error) {
 			console.error("Gemini Error:", error.message);
+			// إذا استمر خطأ 404 في Gemini، قد تحتاج للتأكد من تفعيل "Generative Language API" في Google Cloud
 		}
 	}
 };
