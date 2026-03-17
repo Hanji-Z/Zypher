@@ -3,10 +3,10 @@ const axios = require("axios");
 module.exports = {
 	config: {
 		name: "ai",
-		version: "2.7",
+		version: "2.8",
 		author: "𝗦𝗵𝗔𝗻 & Gemini",
 		countDown: 5,
-		role: 2,
+		role: 0,
 		description: {
 			en: "الرد الذكي عبر Groq (يعمل عند الرد على البوت)"
 		},
@@ -38,6 +38,8 @@ module.exports = {
 	onChat: async function ({ event, threadsData, api, message }) {
 		const { threadID, messageID, body, senderID, type, messageReply } = event;
 		const botID = api.getCurrentUserID();
+		
+		// مفتاح الـ API الخاص بك
 		const apiKey = "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";
 
 		if (type !== "message_reply" || senderID === botID || !body) return;
@@ -50,32 +52,37 @@ module.exports = {
 			api.setMessageReaction("⏳", messageID, () => {}, true);
 
 			const res = await axios.post("https://api.groq.com/openai/v1/chat/completions", {
-                // تم التحديث إلى الموديل الجديد لتفادي خطأ 400
-				model: "llama-3.1-70b-versatile", 
+				// 🔴 التغيير الجوهري هنا: استخدام أحدث موديل شغال حالياً
+				model: "llama-3.3-70b-versatile", 
 				messages: [
 					{ 
 						role: "system", 
-                        content: "أنت مساعد ذكي ومرح. تحدث بلهجة عربية طبيعية جداً، وتصرف كصديق في جروب دردشة. إجاباتك يجب أن تكون مختصرة، عفوية، وبعيدة عن الرسمية المبالغ فيها. يمكنك فهم الدارجة المغربية والرد بأسلوب لطيف." 
+						content: "أنت مساعد ذكي ومرح. تحدث بلهجة عربية طبيعية جداً، وتصرف كصديق في جروب دردشة. إجاباتك يجب أن تكون مختصرة، عفوية، وبعيدة عن الرسمية المبالغ فيها. يمكنك فهم الدارجة المغربية والرد بأسلوب لطيف." 
 					},
 					{ role: "user", content: body }
 				]
 			}, {
 				headers: { 
-                    "Authorization": `Bearer ${apiKey}`,
-                    "Content-Type": "application/json"
-                }
+					"Authorization": `Bearer ${apiKey}`,
+					"Content-Type": "application/json"
+				}
 			});
 
-			let response = res.data.choices[0].message.content;
-
-			if (response && response.trim() !== "") {
-				api.setMessageReaction("✅", messageID, () => {}, true);
-				return message.reply(response);
+			// التأكد من وجود رد فعلي قبل إرساله لمنع خطأ 1545023
+			if (res.data && res.data.choices && res.data.choices[0].message.content) {
+				let response = res.data.choices[0].message.content;
+				
+				if (response.trim() !== "") {
+					api.setMessageReaction("✅", messageID, () => {}, true);
+					return message.reply(response);
+				}
 			}
+			
 		} catch (error) {
-            // هذا التعديل سيطبع تفاصيل الخطأ في سجلات GitHub لتعرف المشكلة بدقة
 			console.error("AI Chat Error Details:", error.response ? error.response.data : error.message);
 			api.setMessageReaction("❌", messageID, () => {}, true);
+			// إرسال رسالة خطأ واضحة داخل الدردشة لتعرف أن هناك مشكلة دون الحاجة للسجلات
+			return message.reply("عذراً، سيرفر الذكاء الاصطناعي يواجه مشكلة حالياً ⚠️");
 		}
 	}
 };
