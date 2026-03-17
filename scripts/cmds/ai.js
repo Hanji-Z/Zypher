@@ -3,7 +3,7 @@ const axios = require("axios");
 module.exports = {
 	config: {
 		name: "ai",
-		version: "2.6",
+		version: "2.7",
 		author: "𝗦𝗵𝗔𝗻 & Gemini",
 		countDown: 5,
 		role: 2,
@@ -24,7 +24,6 @@ module.exports = {
 			return message.reply("المرجو استخدام الأمر بشكل صحيح:\n- اكتب `ai on` لتفعيل البوت.\n- اكتب `ai off` لإيقافه.");
 		}
 
-		// تخزين الحالة في threadsData
 		await threadsData.set(threadID, status === "on", "data.aiEnabled");
 		
 		api.setMessageReaction(status === "on" ? "⏳" : "✅", messageID, () => {}, true);
@@ -36,19 +35,14 @@ module.exports = {
 		return message.reply(msg);
 	},
 
-	// تم التغيير إلى onChat لأنها المسؤولة عن قراءة نصوص الدردشة والردود
 	onChat: async function ({ event, threadsData, api, message }) {
 		const { threadID, messageID, body, senderID, type, messageReply } = event;
 		const botID = api.getCurrentUserID();
 		const apiKey = "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";
 
-		// 1. الحماية: التأكد أن الرسالة عبارة عن Reply، وليست من البوت نفسه، وتحتوي على نص
 		if (type !== "message_reply" || senderID === botID || !body) return;
-
-		// 2. التأكد أن الرد موجه لرسالة البوت حصراً
 		if (!messageReply || messageReply.senderID !== botID) return;
 
-		// 3. التحقق من تفعيل الميزة في المجموعة
 		const isAiEnabled = await threadsData.get(threadID, "data.aiEnabled", false);
 		if (!isAiEnabled) return;
 
@@ -56,11 +50,11 @@ module.exports = {
 			api.setMessageReaction("⏳", messageID, () => {}, true);
 
 			const res = await axios.post("https://api.groq.com/openai/v1/chat/completions", {
-				model: "llama3-70b-8192",
+                // تم التحديث إلى الموديل الجديد لتفادي خطأ 400
+				model: "llama-3.1-70b-versatile", 
 				messages: [
 					{ 
 						role: "system", 
-                        // تم تعديل التوجيه ليكون طبيعياً ومرحاً كصديق
                         content: "أنت مساعد ذكي ومرح. تحدث بلهجة عربية طبيعية جداً، وتصرف كصديق في جروب دردشة. إجاباتك يجب أن تكون مختصرة، عفوية، وبعيدة عن الرسمية المبالغ فيها. يمكنك فهم الدارجة المغربية والرد بأسلوب لطيف." 
 					},
 					{ role: "user", content: body }
@@ -74,13 +68,13 @@ module.exports = {
 
 			let response = res.data.choices[0].message.content;
 
-			// 🛡️ منع خطأ الرسالة الفارغة
 			if (response && response.trim() !== "") {
 				api.setMessageReaction("✅", messageID, () => {}, true);
 				return message.reply(response);
 			}
 		} catch (error) {
-			console.error("AI Chat Error:", error);
+            // هذا التعديل سيطبع تفاصيل الخطأ في سجلات GitHub لتعرف المشكلة بدقة
+			console.error("AI Chat Error Details:", error.response ? error.response.data : error.message);
 			api.setMessageReaction("❌", messageID, () => {}, true);
 		}
 	}
