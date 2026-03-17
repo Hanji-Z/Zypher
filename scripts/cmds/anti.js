@@ -5,7 +5,7 @@ module.exports = {
 		name: "anti", 
 		aliases: ["ac", "antichange"],
 		version: "2.5",
-		author: "𝗦𝗵𝗔𝗻 & Gemini",
+		author: "𝗦𝗵𝗔𝗻 & Gem9ini",
 		countDown: 5,
 		role: 2, // للمشرفين فقط
 		description: {
