@@ -3,55 +3,85 @@ const axios = require("axios");
 module.exports = {
 	config: {
 		name: "ai",
-		version: "2.2",
-		author: "Gemini",
+		version: "2.6",
+		author: "𝗦𝗵𝗔𝗻 & Gemini",
 		countDown: 5,
 		role: 2,
-		description: { en: "AI Chat with Gemini" },
+		description: {
+			en: "الرد الذكي عبر Groq (يعمل عند الرد على البوت)"
+		},
 		category: "AI",
-		guide: { en: "{pn} on | off" }
+		guide: {
+			en: "   {pn} on : لتفعيل الرد الذكي\n   {pn} off : لإيقاف الرد الذكي"
+		}
 	},
 
-	onStart: async function ({ message, event, args, threadsData }) {
-		const { threadID } = event;
+	onStart: async function ({ message, event, args, threadsData, api }) {
+		const { threadID, messageID } = event;
 		const status = args[0]?.toLowerCase();
-		if (!["on", "off"].includes(status)) return message.reply("استخدم: ai on أو ai off");
+
+		if (!["on", "off"].includes(status)) {
+			return message.reply("المرجو استخدام الأمر بشكل صحيح:\n- اكتب `ai on` لتفعيل البوت.\n- اكتب `ai off` لإيقافه.");
+		}
+
+		// تخزين الحالة في threadsData
 		await threadsData.set(threadID, status === "on", "data.aiEnabled");
-		return message.reply(status === "on" ? "تم التفعيل بنجاح ✅" : "تم الإيقاف ❌");
+		
+		api.setMessageReaction(status === "on" ? "⏳" : "✅", messageID, () => {}, true);
+
+		const msg = status === "on" 
+			? "تم تفعيل الذكاء الاصطناعي بنجاح ✅\nالآن سأقوم بالرد على أي شخص يقتبس (Reply) رسائلي." 
+			: "تم إيقاف الذكاء الاصطناعي ❌";
+		
+		return message.reply(msg);
 	},
 
-	onChat: async function ({ api, event, threadsData, message }) {
-		const { threadID, body, senderID, messageReply } = event;
+	// تم التغيير إلى onChat لأنها المسؤولة عن قراءة نصوص الدردشة والردود
+	onChat: async function ({ event, threadsData, api, message }) {
+		const { threadID, messageID, body, senderID, type, messageReply } = event;
 		const botID = api.getCurrentUserID();
+		const apiKey = "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";
 
-		if (senderID === botID || !body) return;
+		// 1. الحماية: التأكد أن الرسالة عبارة عن Reply، وليست من البوت نفسه، وتحتوي على نص
+		if (type !== "message_reply" || senderID === botID || !body) return;
 
+		// 2. التأكد أن الرد موجه لرسالة البوت حصراً
+		if (!messageReply || messageReply.senderID !== botID) return;
+
+		// 3. التحقق من تفعيل الميزة في المجموعة
 		const isAiEnabled = await threadsData.get(threadID, "data.aiEnabled", false);
 		if (!isAiEnabled) return;
 
-		// الرد فقط عند عمل Reply لرسالة البوت
-		if (!messageReply || messageReply.senderID !== botID) return;
-
-		const GEMINI_API_KEY = "AIzaSyCJ4oQAoLCdcAx9kN-qd9FQaKzK-Y2Fd6o"; 
-
 		try {
-			// تم إزالة sendTypingIndicator لتجنب خطأ 404 الظاهر في الصورة
-			
-			const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`;
+			api.setMessageReaction("⏳", messageID, () => {}, true);
 
-			const res = await axios.post(url, {
-				contents: [{ parts: [{ text: `أنت بوت فكاهي ومشاكس، رد باختصار وبلهجة مغربية مضحكة على: ${body}` }] }]
+			const res = await axios.post("https://api.groq.com/openai/v1/chat/completions", {
+				model: "llama3-70b-8192",
+				messages: [
+					{ 
+						role: "system", 
+                        // تم تعديل التوجيه ليكون طبيعياً ومرحاً كصديق
+                        content: "أنت مساعد ذكي ومرح. تحدث بلهجة عربية طبيعية جداً، وتصرف كصديق في جروب دردشة. إجاباتك يجب أن تكون مختصرة، عفوية، وبعيدة عن الرسمية المبالغ فيها. يمكنك فهم الدارجة المغربية والرد بأسلوب لطيف." 
+					},
+					{ role: "user", content: body }
+				]
 			}, {
-                headers: { 'Content-Type': 'application/json' }
-            });
+				headers: { 
+                    "Authorization": `Bearer ${apiKey}`,
+                    "Content-Type": "application/json"
+                }
+			});
 
-			if (res.data && res.data.candidates && res.data.candidates[0].content) {
-				const response = res.data.candidates[0].content.parts[0].text;
+			let response = res.data.choices[0].message.content;
+
+			// 🛡️ منع خطأ الرسالة الفارغة
+			if (response && response.trim() !== "") {
+				api.setMessageReaction("✅", messageID, () => {}, true);
 				return message.reply(response);
 			}
 		} catch (error) {
-			console.error("Gemini Error:", error.message);
-			// إذا استمر خطأ 404 في Gemini، قد تحتاج للتأكد من تفعيل "Generative Language API" في Google Cloud
+			console.error("AI Chat Error:", error);
+			api.setMessageReaction("❌", messageID, () => {}, true);
 		}
 	}
 };
