@@ -1,221 +1,205 @@
+Enterconst { getStreamFromURL, uploadImgbb } = global.utils;
+
+module.exports = {
+	config: {
+		name: "antichangeinfobox", 
+		aliases: ["ac", "anti"],
+		version: "2.5",
+		author: "𝗦𝗵𝗔𝗻 & Gem9ini",
+		countDown: 5,
+		role: 2, // للمشرفين فقط
+		description: {
+			en: "حماية معلومات المجموعة (الاسم، الكنيات، الصورة) مع ميزة العمل الصامت"
+		},
+		category: "𝗕𝗢𝗫 𝗖𝗛𝗔𝗧",
+		guide: {
+			en: "   {pn} avt [on | off]\n   {pn} name [on | off]\n   {pn} nc [on | off]"
+		}
+	},
+
+	onStart: async function ({ message, event, args, threadsData, api }) {
+		let option = args[0]?.toLowerCase();
+		const status = args[1]?.toLowerCase();
+
+		if (!["on", "off"].includes(status)) return;
+		if (option === "nc") option = "nickname";
+
+		const { threadID, messageID } = event;
+		const dataAntiChangeInfoBox = await threadsData.get(threadID, "data.antiChangeInfoBox", {});
+
+		async function checkAndSaveData(key, data) {
+			if (status === "off") {
+				delete dataAntiChangeInfoBox[key];
+			} else {
+				dataAntiChangeInfoBox[key] = data;
+			}
+
+			await threadsData.set(threadID, dataAntiChangeInfoBox, "data.antiChangeInfoBox");
+			// تفاعل بسيط للتأكيد على التفعيل/الإيقاف
+			api.setMessageReaction(status === "on" ? "✅" : "❌", messageID, () => {}, true);
+		}
+
+		switch (option) {
+			case "avt":
+			case "avatar": {
+				const { imageSrc } = await threadsData.get(threadID);
+				if (!imageSrc && status === "on") return;
+				const newImageSrc = status === "on" ? await uploadImgbb(imageSrc) : null;
+				await checkAndSaveData("avatar", newImageSrc ? newImageSrc.image.url : null);
+				break;
+			}
+			case "name": {
+				// جلب اسم المجموعة الحالي من بيانات الخيط
+				const threadInfo = await api.getThreadInfo(threadID);
+				const currentName = threadInfo.threadName;
+				await checkAndSaveData("name", currentName);
+				break;
+			}
+			case "nickname": {
+				// حفظ جميع كنيات الأعضاء الحالية في كائن واحد
+				const threadInfo = await api.getThreadInfo(threadID);
+				const originalNicknames = threadInfo.nicknames || {};
+				await checkAndSaveData("nickname", originalNicknames);
+				break;
+			}
+			default: return;
+		}
+	},
+
+	onEvent: async function ({ event, threadsData, api }) {
+		const { threadID, logMessageType, logMessageData, author } = event;
+		const botID = api.getCurrentUserID();
+
+		// تجاهل التغييرات التي يقوم بها البوت نفسه
+		if (author === botID) return;
+
+		const dataAntiChange = await threadsData.get(threadID, "data.antiChangeInfoBox", {});
+
+		switch (logMessageType) {
+			case "log:thread-image": {
+				if (!dataAntiChange.avatar) return;
+				// إعادة الصورة القديمة فوراً
+				return api.changeGroupImage(await getStreamFromURL(dataAntiChange.avatar), threadID);
+			}
+
+			case "log:thread-name": {
+				if (!dataAntiChange.hasOwnProperty("name")) return;
+				// إعادة الاسم القديم المخزن في الذاكرة فوراً وبصمت
+				return api.setTitle(dataAntiChange.name, threadID);
+			}
+
+			case "log:user-nickname": {
+				if (!dataAntiChange.hasOwnProperty("nickname")) return;
+				const { participant_id } = logMessageData;
+				
+				// جلب الكنية القديمة من الذاكرة (إذا لم تكن موجودة تصبح فارغة لإزالة الكنية الجديدة)
+				const oldNick = dataAntiChange.nickname[participant_id] || "";
+				
+				// إعادة الكنية القديمة بصمت تام (بدون إرسال أي رسالة في الشات)
+				return api.changeNickname(oldNick, threadID, participant_id);
+			}
+		}
+	}
+};
 const { getStreamFromURL, uploadImgbb } = global.utils;
 
 module.exports = {
 	config: {
-		name: "antichangeinfobox",
-		version: "1.9",
-		author: "𝗦𝗵𝗔𝗻",
+		name: "anti", 
+		aliases: ["ac", "antichange"],
+		version: "2.5",
+		author: "𝗦𝗵𝗔𝗻 & Gemini",
 		countDown: 5,
-		role: 0,
+		role: 2, // للمشرفين فقط
 		description: {
-			vi: "Bật tắt chức năng chống thành viên đổi thông tin box chat của bạn",
-			en: "Turn on/off anti change info box"
+			en: "حماية معلومات المجموعة (الاسم، الكنيات، الصورة) مع ميزة العمل الصامت"
 		},
 		category: "𝗕𝗢𝗫 𝗖𝗛𝗔𝗧",
 		guide: {
-			vi: "   {pn} avt [on | off]: chống đổi avatar box chat"
-				+ "\n   {pn} name [on | off]: chống đổi tên box chat"
-				+ "\n   {pn} nickname [on | off]: chống đổi nickname trong box chat"
-				+ "\n   {pn} theme [on | off]: chống đổi theme (chủ đề) box chat"
-				+ "\n   {pn} emoji [on | off]: chống đổi trạng emoji box chat",
-			en: "   {pn} avt [on | off]: anti change avatar box chat"
-				+ "\n   {pn} name [on | off]: anti change name box chat"
-				+ "\n   {pn} nickname [on | off]: anti change nickname in box chat"
-				+ "\n   {pn} theme [on | off]: anti change theme (chủ đề) box chat"
-				+ "\n   {pn} emoji [on | off]: anti change emoji box chat"
+			en: "   {pn} avt [on | off]\n   {pn} name [on | off]\n   {pn} nc [on | off]"
 		}
 	},
 
-	langs: {
-		vi: {
-			antiChangeAvatarOn: "Đã bật chức năng chống đổi avatar box chat",
-			antiChangeAvatarOff: "Đã tắt chức năng chống đổi avatar box chat",
-			missingAvt: "Bạn chưa đặt avatar cho box chat",
-			antiChangeNameOn: "Đã bật chức năng chống đổi tên box chat",
-			antiChangeNameOff: "Đã tắt chức năng chống đổi tên box chat",
-			antiChangeNicknameOn: "Đã bật chức năng chống đổi nickname box chat",
-			antiChangeNicknameOff: "Đã tắt chức năng chống đổi nickname box chat",
-			antiChangeThemeOn: "Đã bật chức năng chống đổi theme (chủ đề) box chat",
-			antiChangeThemeOff: "Đã tắt chức năng chống đổi theme (chủ đề) box chat",
-			antiChangeEmojiOn: "Đã bật chức năng chống đổi emoji box chat",
-			antiChangeEmojiOff: "Đã tắt chức năng chống đổi emoji box chat",
-			antiChangeAvatarAlreadyOn: "Hiện tại box chat của bạn đang bật chức năng cấm thành viên đổi avatar",
-			antiChangeAvatarAlreadyOnButMissingAvt: "Hiện tại box chat của bạn đang bật chức năng cấm thành viên đổi avatar box chat chưa được đặt avatar",
-			antiChangeNameAlreadyOn: "Hiện tại box chat của bạn đang bật chức năng cấm thành viên đổi tên",
-			antiChangeNicknameAlreadyOn: "Hiện tại box chat của bạn đang bật chức năng cấm thành viên đổi nickname",
-			antiChangeThemeAlreadyOn: "Hiện tại box chat của bạn đang bật chức năng cấm thành viên đổi theme (chủ đề)",
-			antiChangeEmojiAlreadyOn: "Hiện tại box chat của bạn đang bật chức năng cấm thành viên đổi emoji"
-		},
-		en: {
-			antiChangeAvatarOn: "Turn on anti change avatar box chat",
-			antiChangeAvatarOff: "Turn off anti change avatar box chat",
-			missingAvt: "You have not set avatar for box chat",
-			antiChangeNameOn: "Turn on anti change name box chat",
-			antiChangeNameOff: "Turn off anti change name box chat",
-			antiChangeNicknameOn: "Turn on anti change nickname box chat",
-			antiChangeNicknameOff: "Turn off anti change nickname box chat",
-			antiChangeThemeOn: "Turn on anti change theme box chat",
-			antiChangeThemeOff: "Turn off anti change theme box chat",
-			antiChangeEmojiOn: "Turn on anti change emoji box chat",
-			antiChangeEmojiOff: "Turn off anti change emoji box chat",
-			antiChangeAvatarAlreadyOn: "Your box chat is currently on anti change avatar",
-			antiChangeAvatarAlreadyOnButMissingAvt: "Your box chat is currently on anti change avatar but your box chat has not set avatar",
-			antiChangeNameAlreadyOn: "Your box chat is currently on anti change name",
-			antiChangeNicknameAlreadyOn: "Your box chat is currently on anti change nickname",
-			antiChangeThemeAlreadyOn: "Your box chat is currently on anti change theme",
-			antiChangeEmojiAlreadyOn: "Your box chat is currently on anti change emoji"
-		}
-	},
+	onStart: async function ({ message, event, args, threadsData, api }) {
+		let option = args[0]?.toLowerCase();
+		const status = args[1]?.toLowerCase();
 
-	onStart: async function ({ message, event, args, threadsData, getLang }) {
-		if (!["on", "off"].includes(args[1]))
-			return message.SyntaxError();
-		const { threadID } = event;
+		if (!["on", "off"].includes(status)) return;
+		if (option === "nc") option = "nickname";
+
+		const { threadID, messageID } = event;
 		const dataAntiChangeInfoBox = await threadsData.get(threadID, "data.antiChangeInfoBox", {});
+
 		async function checkAndSaveData(key, data) {
-			// dataAntiChangeInfoBox[key] = args[1] === "on" ? data : false;
-			if (args[1] === "off")
+			if (status === "off") {
 				delete dataAntiChangeInfoBox[key];
-			else
+			} else {
 				dataAntiChangeInfoBox[key] = data;
+			}
 
 			await threadsData.set(threadID, dataAntiChangeInfoBox, "data.antiChangeInfoBox");
-			message.reply(getLang(`antiChange${key.slice(0, 1).toUpperCase()}${key.slice(1)}${args[1].slice(0, 1).toUpperCase()}${args[1].slice(1)}`));
+			// تفاعل بسيط للتأكيد على التفعيل/الإيقاف
+			api.setMessageReaction(status === "on" ? "✅" : "❌", messageID, () => {}, true);
 		}
-		switch (args[0]) {
+
+		switch (option) {
 			case "avt":
-			case "avatar":
-			case "image": {
+			case "avatar": {
 				const { imageSrc } = await threadsData.get(threadID);
-				if (!imageSrc)
-					return message.reply(getLang("missingAvt"));
-				const newImageSrc = await uploadImgbb(imageSrc);
-				await checkAndSaveData("avatar", newImageSrc.image.url);
+				if (!imageSrc && status === "on") return;
+				const newImageSrc = status === "on" ? await uploadImgbb(imageSrc) : null;
+				await checkAndSaveData("avatar", newImageSrc ? newImageSrc.image.url : null);
 				break;
 			}
 			case "name": {
-				const { threadName } = await threadsData.get(threadID);
-				await checkAndSaveData("name", threadName);
+				// جلب اسم المجموعة الحالي من بيانات الخيط
+				const threadInfo = await api.getThreadInfo(threadID);
+				const currentName = threadInfo.threadName;
+				await checkAndSaveData("name", currentName);
 				break;
 			}
 			case "nickname": {
-				const { members } = await threadsData.get(threadID);
-				await checkAndSaveData("nickname", members.map(user => ({ [user.userID]: user.nickname })).reduce((a, b) => ({ ...a, ...b }), {}));
+				// حفظ جميع كنيات الأعضاء الحالية في كائن واحد
+				const threadInfo = await api.getThreadInfo(threadID);
+				const originalNicknames = threadInfo.nicknames || {};
+				await checkAndSaveData("nickname", originalNicknames);
 				break;
 			}
-			case "theme": {
-				const { threadThemeID } = await threadsData.get(threadID);
-				await checkAndSaveData("theme", threadThemeID);
-				break;
-			}
-			case "emoji": {
-				const { emoji } = await threadsData.get(threadID);
-				await checkAndSaveData("emoji", emoji);
-				break;
-			}
-			default: {
-				return message.SyntaxError();
-			}
+			default: return;
 		}
 	},
 
-	onEvent: async function ({ message, event, threadsData, role, api, getLang }) {
+	onEvent: async function ({ event, threadsData, api }) {
 		const { threadID, logMessageType, logMessageData, author } = event;
+		const botID = api.getCurrentUserID();
+
+		// تجاهل التغييرات التي يقوم بها البوت نفسه
+		if (author === botID) return;
+
+		const dataAntiChange = await threadsData.get(threadID, "data.antiChangeInfoBox", {});
+
 		switch (logMessageType) {
 			case "log:thread-image": {
-				const dataAntiChange = await threadsData.get(threadID, "data.antiChangeInfoBox", {});
-				if (!dataAntiChange.avatar && role < 1)
-					return;
-				return async function () {
-					// check if user not is admin or bot then change avatar back
-					if (role < 1 && api.getCurrentUserID() !== author) {
-						if (dataAntiChange.avatar != "REMOVE") {
-							message.reply(getLang("antiChangeAvatarAlreadyOn"));
-							api.changeGroupImage(await getStreamFromURL(dataAntiChange.avatar), threadID);
-						}
-						else {
-							message.reply(getLang("antiChangeAvatarAlreadyOnButMissingAvt"));
-						}
-					}
-					// else save new avatar
-					else {
-						const imageSrc = logMessageData.url;
-						if (!imageSrc)
-							return await threadsData.set(threadID, "REMOVE", "data.antiChangeInfoBox.avatar");
-
-						const newImageSrc = await uploadImgbb(imageSrc);
-						await threadsData.set(threadID, newImageSrc.image.url, "data.antiChangeInfoBox.avatar");
-					}
-				};
+				if (!dataAntiChange.avatar) return;
+				// إعادة الصورة القديمة فوراً
+				return api.changeGroupImage(await getStreamFromURL(dataAntiChange.avatar), threadID);
 			}
+
 			case "log:thread-name": {
-				const dataAntiChange = await threadsData.get(threadID, "data.antiChangeInfoBox", {});
-				// const name = await threadsData.get(threadID, "data.antiChangeInfoBox.name");
-				// if (name == false)
-				if (!dataAntiChange.hasOwnProperty("name"))
-					return;
-				return async function () {
-					if (role < 1 && api.getCurrentUserID() !== author) {
-						message.reply(getLang("antiChangeNameAlreadyOn"));
-						api.setTitle(dataAntiChange.name, threadID);
-					}
-					else {
-						const threadName = logMessageData.name;
-						await threadsData.set(threadID, threadName, "data.antiChangeInfoBox.name");
-					}
-				};
+				if (!dataAntiChange.hasOwnProperty("name")) return;
+				// إعادة الاسم القديم المخزن في الذاكرة فوراً وبصمت
+				return api.setTitle(dataAntiChange.name, threadID);
 			}
-			case "log:user-nickname": {
-				const dataAntiChange = await threadsData.get(threadID, "data.antiChangeInfoBox", {});
-				// const nickname = await threadsData.get(threadID, "data.antiChangeInfoBox.nickname");
-				// if (nickname == false)
-				if (!dataAntiChange.hasOwnProperty("nickname"))
-					return;
-				return async function () {
-					const { nickname, participant_id } = logMessageData;
 
-					if (role < 1 && api.getCurrentUserID() !== author) {
-						message.reply(getLang("antiChangeNicknameAlreadyOn"));
-						api.changeNickname(dataAntiChange.nickname[participant_id], threadID, participant_id);
-					}
-					else {
-						await threadsData.set(threadID, nickname, `data.antiChangeInfoBox.nickname.${participant_id}`);
-					}
-				};
-			}
-			case "log:thread-color": {
-				const dataAntiChange = await threadsData.get(threadID, "data.antiChangeInfoBox", {});
-				// const themeID = await threadsData.get(threadID, "data.antiChangeInfoBox.theme");
-				// if (themeID == false)
-				if (!dataAntiChange.hasOwnProperty("theme"))
-					return;
-				return async function () {
-					if (role < 1 && api.getCurrentUserID() !== author) {
-						message.reply(getLang("antiChangeThemeAlreadyOn"));
-						api.changeThreadColor(dataAntiChange.theme || "196241301102133", threadID); // 196241301102133 is default color
-					}
-					else {
-						const threadThemeID = logMessageData.theme_id;
-						await threadsData.set(threadID, threadThemeID, "data.antiChangeInfoBox.theme");
-					}
-				};
-			}
-			case "log:thread-icon": {
-				const dataAntiChange = await threadsData.get(threadID, "data.antiChangeInfoBox", {});
-				// const emoji = await threadsData.get(threadID, "data.antiChangeInfoBox.emoji");
-				// if (emoji == false)
-				if (!dataAntiChange.hasOwnProperty("emoji"))
-					return;
-				return async function () {
-					if (role < 1 && api.getCurrentUserID() !== author) {
-						message.reply(getLang("antiChangeEmojiAlreadyOn"));
-						api.changeThreadEmoji(dataAntiChange.emoji, threadID);
-					}
-					else {
-						const threadEmoji = logMessageData.thread_icon;
-						await threadsData.set(threadID, threadEmoji, "data.antiChangeInfoBox.emoji");
-					}
-				};
+			case "log:user-nickname": {
+				if (!dataAntiChange.hasOwnProperty("nickname")) return;
+				const { participant_id } = logMessageData;
+				
+				// جلب الكنية القديمة من الذاكرة (إذا لم تكن موجودة تصبح فارغة لإزالة الكنية الجديدة)
+				const oldNick = dataAntiChange.nickname[participant_id] || "";
+				
+				// إعادة الكنية القديمة بصمت تام (بدون إرسال أي رسالة في الشات)
+				return api.changeNickname(oldNick, threadID, participant_id);
 			}
 		}
 	}
