@@ -53,7 +53,7 @@ module.exports = {
         );
 
         await api.changeNickname(
-          `${global.GoatBot.config.nickNameBot || "🦋𝙔𝙤𝙤 𝙔𝙤𝙤 𝗦𝗵𝗔𝗻✨"}`,
+          `${global.GoatBot.config.nickNameBot || "—「BOT"}`,
           group.threadID,
           api.getCurrentUserID()
         );
@@ -116,7 +116,7 @@ module.exports = {
         index++;
       }
 
-      msg += `🦋 𝗦𝗵𝗔𝗻 please Reply with the correct group number to approve!\n`;
+      msg += `🦋 —「𝐇︭𝐚︭𝐧︭'𝐣︭︭𝐢︭ ː͢» ⸙ 漢 .𖤍️️️️️️️️️️️️️️️️️️️️️️️️️️️️️️️️️️️️️️️️️️️️️️️️ please Reply with the correct group number to approve!\n`;
       msg += `✨ Reply with "c" to Cancel.\n`;
 
       return api.sendMessage(
