@@ -10,7 +10,7 @@ module.exports.config = {
   version: "8.3.0",
   role: 0,
   author: "Hanji", 
-  description: "تطقيم بصورة واحدة مع خدعة السيد هانجي",
+  description: "تط8قيم بصورة واحدة مع خدعة السيد هانجي",
   category: "love",
   cooldowns: 7
 };
