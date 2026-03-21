@@ -65,7 +65,7 @@ module.exports.onStart = async ({ event, api, usersData, message }) => {
     ctx.drawImage(av1, x1_av, y1_av, r1 * 2, r1 * 2);
     ctx.restore();
     ctx.strokeStyle = "#FFFFFF";
-    ctx.lineWidth = 4;
+    ctx.lineWidth = 5;
     ctx.stroke();
 
     // ==========================================
@@ -79,7 +79,7 @@ module.exports.onStart = async ({ event, api, usersData, message }) => {
     ctx.drawImage(av2, x2_av, y2_av, r2 * 2, r2 * 2);
     ctx.restore();
     ctx.strokeStyle = "#FFFFFF";
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 5;
     ctx.stroke();
     
     const finalPath = path.join(root, "scripts", "cmds", "cache", `match_${Date.now()}.png`);
