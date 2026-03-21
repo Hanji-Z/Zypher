@@ -7,10 +7,10 @@ const templatePath = path.join(root, "scripts", "cmds", "cache", "ronaldo.jpg");
 
 module.exports.config = {
   name: "myh",
-  version: "8.3.0",
+  version: "8.4.0", // تم تحديث النسخة
   role: 0,
-  author: "myhe", 
-  description: "صورة",
+  author: "myhe & Hanji", // تم تحديث المؤلفين 😉
+  description: "تطقيم بصورة واحدة مع خدعة رونالدو لهانجي",
   category: "love",
   cooldowns: 7
 };
@@ -22,28 +22,38 @@ module.exports.onStart = async ({ event, api, usersData, message }) => {
 
   try {
     api.setMessageReaction("🎨", messageID, () => {}, true);
-    
-    // تعريف المتغيرات بـ let لكي نتمكن من التبديل بينهما
-    let uid1 = senderID; // المفترض أنه المرسل (الولد)
-    let uid2 = messageReply.senderID; // المفترض أنه المستلم (البنت)
+    const hanjiID = "61574764452026"; // الـ ID الخاص بك
+
+    // تعريف المتغيرات بـ let
+    let uid1 = senderID; // المرسل (المفترض أنه الأول)
+    let uid2 = messageReply.senderID; // المستلم (المفترض أنه الثاني)
     
     // الرسالة الافتراضية
     let replyMessage = "𝐓𝐇𝐀𝐓'𝐒 𝐏𝐈𝐂 𝐃𝐎𝐍𝐍𝐄 🖤";
 
-    // 😈 خدعة هانجي (تبديل الأماكن إذا كان المستلم هو أنت)
-    const hanjiID = "61574764452026"; // الـ ID الخاص بك
-    
-    if (uid2 === hanjiID && uid1 !== hanjiID) {
-        // إذا حاول أحدهم تطبيق الأمر عليك، يتم قلب الأماكن
+    // ==========================================
+    // 😈 تصحيح منطق الخدعة لهانجي
+    // الهدف: هانجي يجب أن يكون المستهدف uid2 (البوي/رونالدو في منظورك)
+    // ==========================================
+
+    if (uid1 === hanjiID && uid2 !== hanjiID) {
+        // السيناريو أ: أنت (هانجي) قمت بالرد على شخص آخر.
+        // أنت المرسل. لنجعل الشخص الآخر هو البنت (uid1) وأنت رونالدو (uid2).
         let temp = uid1;
-        uid1 = uid2; // تصبح أنت الولد
-        uid2 = temp; // يصبح هو البنت
-        
-        // تغيير الرسالة لتناسب الخدعة
+        uid1 = uid2; // الشخص الآخر يصبحuid1 (البنت)
+        uid2 = temp; // أنت تصبح uid2 (رونالدو)
+        // لا نحتاج لتغيير الرسالة في هذا السيناريو
+    } 
+    else if (uid2 === hanjiID && uid1 !== hanjiID) {
+        // السيناريو ب: شخص آخر حاول الرد عليك لجعلك "البنت".
+        // هو المرسل (uid1)، وأنت المستلم (uid2).
+        // المنطق الافتراضي يضعه في uid1 وأنت في uid2. 
+        // هذا هو المكان المثالي! (أنت رونالدو، وهو البنت).
+        // لا نحتاج لقلب UID ولكن نغير رسالة التفاخر بالخدعة.
         replyMessage = "𝐀 𝐠𝐨𝐨𝐝 𝐭𝐫𝐲, 𝐛𝐮𝐭 𝐢𝐭 𝐟𝐚𝐢𝐥𝐞𝐝. 𝐘𝐨𝐮 𝐚𝐫𝐞 𝐭𝐡𝐞 𝐰𝐢𝐟𝐞 𝐨𝐟 𝐌𝐫. 𝐇𝐀𝐍𝐉𝐈 🫢";
     }
 
-    // جلب روابط الصور بناءً على الأماكن الجديدة (بعد الخدعة)
+    // جلب روابط الصور بناءً على الأماكن النهائية الصحيحة
     const avatarURL1 = await usersData.getAvatarUrl(uid1);
     const avatarURL2 = await usersData.getAvatarUrl(uid2);
 
@@ -61,7 +71,8 @@ module.exports.onStart = async ({ event, api, usersData, message }) => {
     const av2 = await loadImage(avatarURL2);
 
     // ==========================================
-    // 1️⃣ رسم صورة الشخص الأول (الولد)
+    // 1️⃣ رسم صورة الشخص الأول (في ذهنك البنت/المكان الثانوي)
+    // الإحداثيات الأولى (الكبيرة)
     // ==========================================
     const x1_av = 943, y1_av = 190, r1 = 225; 
 
@@ -79,7 +90,8 @@ module.exports.onStart = async ({ event, api, usersData, message }) => {
     ctx.stroke();
 
     // ==========================================
-    // 2️⃣ رسم صورة الشخص الثاني (البنت)
+    // 2️⃣ رسم صورة الشخص الثاني (في ذهنك رونالدو/المكان الرئيسي)
+    // الإحداثيات الثانية (الصغيرة)
     // ==========================================
     const x2_av = 1877, y2_av = 577, r2 = 170;
 
@@ -112,4 +124,3 @@ module.exports.onStart = async ({ event, api, usersData, message }) => {
     return message.reply("حدث خطأ تقني أثناء الرسم. ❌");
   }
 };
-
