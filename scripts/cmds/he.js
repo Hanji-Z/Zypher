@@ -6,12 +6,12 @@ const root = process.cwd();
 const templatePath = path.join(root, "scripts", "cmds", "cache", "ronaldo.jpg");
 
 module.exports.config = {
-  name: "myh",
+  name: "he",
   version: "8.5.0",
   role: 0,
   author: "myhe & Hanji", 
   description: "تطقيم مع حماية خاصة للمالك هانجي",
-  category: "love",
+  category: "Fun",
   cooldowns: 7
 };
 
