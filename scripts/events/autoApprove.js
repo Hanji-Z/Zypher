@@ -1,52 +1,60 @@
-Entermodule.exports.config = {
+module.exports.config = {
   name: "autoApprove",
-  eventType: ["log:subscribe"], 
-  version: "1.2.0",
+  eventType: ["log:subscribe"],
+  version: "2.0.0",
   author: "Hanji",
-  description: "الموافقة التلقائية على المجموعات والترحيب الفوري"
+  description: "الموافقة التلقائية وتنشيط كل المجلدات (Inbox, Pending, Other)"
 };
 
+// 1️⃣ الجزء المسؤول عن تنشيط المجموعات "عند تشغيل البوت" (onLoad)
+module.exports.onLoad = async ({ api }) => {
+  console.log("🚀 جاري فحص وتنشيط جميع المجموعات (بما فيها المخفية)...");
+
+  // جلب القوائم من كل المجلدات لضمان أن البوت "يرى" المجموعات 2، 6، 8 وغيرها
+  const folders = ["INBOX", "PENDING", "OTHER"];
+  
+  for (const folder of folders) {
+    api.getThreadList(50, null, [folder], (err, list) => {
+      if (err || !list) return;
+
+      list.forEach(async (thread) => {
+        if (thread.isGroup && thread.isSubscribed) {
+          // إرسال تفاعل (Reaction) وتنبيه بسيط لتنشيط المحادثة
+          api.setMessageReaction("✅", thread.threadID, () => {}, true);
+          
+          // تأخير بسيط لتجنب حظر فيسبوك (Cooldown)
+          setTimeout(() => {
+            api.sendMessage("✨ بـوت هـانـجـي نـشـط الآن فـي هـذه الـمـجـمـوعـة! 🤤🫶", thread.threadID);
+          }, 5000); 
+        }
+      });
+    });
+  }
+};
+
+// 2️⃣ الجزء المسؤول عن "الموافقة الفورية" عند إضافة البوت لمجموعة جديدة (onStart)
 module.exports.onStart = async ({ event, api, threadsData }) => {
   const { threadID, logMessageData } = event;
   const botID = api.getCurrentUserID();
 
-  // 1. التحقق إذا كان العضو الجديد المضاف هو البوت نفسه
+  // التحقق إذا كان العضو المضاف هو البوت
   if (logMessageData.addedParticipants.some(i => i.userFbId == botID)) {
     try {
-      // تحديث بيانات المجموعة في قاعدة البيانات ليصبح البوت نشطاً فيها
+      // تسجيل المجموعة في قاعدة البيانات فوراً
       await threadsData.set(threadID, { isGroup: true });
 
-      // إرسال رسالة ترحيب (هذه الخطوة هي التي تخرج المجموعة من الـ Pending)
-      const msg = "✨ تـم تـفـعـيـل بـوت هـانـجـي بـنـجـاح! 🤤🫶\n\n" +
-                  "🚀 أنـا الآن جـاهـز لـلـعـمـل فـي هـذه الـمـجـمـوعـة.\n" +
-                  "📝 اكـتـب [ .help ] لـرؤيـة قـائـمـة الأوامـر.";
+      // إرسال رسالة ترحيب مقتضبة وذكية
+      const welcomeMsg = "🚀 تـم الـتـفـعـيـل! أنـا جـاهـز لـلـخـدمـة.\n📝 اكـتـب [ .help ] لـلأوامـر.";
+      
+      await api.sendMessage(welcomeMsg, threadID);
 
-      await api.sendMessage(msg, threadID);
+      // تغيير اللقب لتمييز البوت
+      const name = global.GoatBot.config.botName || "HANJI BOT";
+      await api.changeNickname(`—「 ${name} 」—`, threadID, botID);
 
-      // تغيير لقب البوت داخل المجموعة ليكون مميزاً
-      const botName = global.GoatBot.config.botName || "HANJI BOT";
-      await api.changeNickname(`—「 ${botName} 」—`, threadID, botID);
-
-      console.log(`[ AUTO-APPROVE ] ✅ تـم تفعيل المجموعة: ${threadID}`);
-
+      console.log(`✅ [SUCCESS] تـم تفعيل المجموعة الجديدة: ${threadID}`);
     } catch (error) {
-      console.error(`[ ERROR ] ❌ فشل في تفعيل المجموعة: ${error}`);
+      console.error(`❌ [ERROR] فشل التفعيل التلقائي: ${error}`);
     }
   }
-};
-
-// 2. وظيفة إضافية: تنظيف قائمة الـ Pending كلما بدأ البوت (اختياري)
-module.exports.onLoad = async ({ api }) => {
-  console.log("🔍 جاري فحص طلبات المجموعات المعلقة...");
-  
-  api.getThreadList(100, null, ["PENDING", "OTHER"], async (err, list) => {
-    if (err) return;
-    
-    for (const thread of list) {
-      if (thread.isGroup && thread.isSubscribed) {
-        // إرسال رسالة "إيقاظ" للمجموعات التي كانت معلقة سابقاً
-        api.sendMessage("✨ بـوت هـانـجـي عـاد لـلـعـمـل! 🤤🫶", thread.threadID);
-      }
-    }
-  });
 };
