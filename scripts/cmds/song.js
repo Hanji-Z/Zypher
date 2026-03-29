@@ -1,81 +1,78 @@
-const axios = require("axios");
-const fs = require("fs");
-
-const baseApiUrl = async () => {
-  const base = await axios.get(
-    `https://raw.githubusercontent.com/Blankid018/D1PT0/main/baseApiUrl.json`
-  );
-  return base.data.api;
-};
+const fs = require("fs-extra");
+const ytdl = require("ytdl-core");
+const ytSearch = require("yt-search");
+const path = require("path");
 
 module.exports = {
   config: {
     name: "song",
-    version: "1.0.0",
+    version: "2.2.0",
     aliases: ["mp3", "audio"],
-    author: "dipto",
+    author: "Zypher & Hanji",
     countDown: 5,
     role: 0,
     description: {
-      en: "Download audio (MP3) from YouTube",
+      en: "Silent search with a stylish result body",
     },
     category: "media",
     guide: {
-      en: "  {pn} [<video name>|<video link>]: use to download audio from YouTube."
-          + "\n   Example:"
-          + "\n {pn} despacito"
-          + "\n {pn} https://youtu.be/abc123xyz",
+      en: "{pn} [song name]"
     },
   },
 
   onStart: async ({ api, args, event }) => {
-  api.setMessageReaction("⏳", event.messageID, (err) => {}, true);
-    if (args.length === 0) {
-      return api.sendMessage("❌ Please provide a YouTube video name or link.", event.threadID, event.messageID);
+    const { threadID, messageID } = event;
+    const songName = args.join(" ");
+    const cachePath = path.join(__dirname, '/cache');
+
+    // دالة الزخرفة ديال زيفر
+    const zypherBox = (title, msg) => `[ 𝗭𝗬𝗣𝗛𝗘𝗥 - ${title} ]\n╼━━━━━━━━━━━━━━━━━━━━╾\n${msg}\n╼━━━━━━━━━━━━━━━━━━━━╾\n[ 𝗔𝗖𝗖𝗘𝗦𝗦 𝗚𝗥𝗔𝗡𝗧𝗘𝗗 - 𝗛𝗔𝗡𝗝𝗜 ]`;
+
+    if (!songName) {
+      return api.setMessageReaction("⚠️", messageID, () => {}, true);
     }
 
-    const checkurl =
-      /^(?:https?:\/\/)?(?:m\.|www\.)?(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))((\w|-){11})(?:\S+)?$/;
-    
-    let videoID;
-    if (checkurl.test(args[0])) {
-      const match = args[0].match(checkurl);
-      videoID = match ? match[1] : null;
-    } else {
-      const searchQuery = args.join(" ");
-      try {
-        const searchResults = await axios.get(`${await baseApiUrl()}/ytFullSearch?songName=${searchQuery}`);
-        if (!searchResults.data.length) {
-          return api.sendMessage(`⭕ No search results found for: ${searchQuery}`, event.threadID, event.messageID);
-        }
-        videoID = searchResults.data[0].id;
-      } catch (error) {
-        return api.sendMessage("❌ An error occurred while searching.", event.threadID, event.messageID);
-      }
-    }
+    // المرحلة الصامتة (إيموجي فقط)
+    api.setMessageReaction("⏳", messageID, () => {}, true);
 
     try {
-      const format = "mp3";
-      const path = `yt_audio_${videoID}.${format}`;
-      const { data: { title, downloadLink, quality } } = await axios.get(`${await baseApiUrl()}/ytDl3?link=${videoID}&format=${format}&quality=3`);
-      
-      await api.sendMessage({
-        body: `🎵 Title: ${title}\n🎧 Quality: ${quality}`,
-        attachment: await downloadFile(downloadLink, path),
-      }, event.threadID, () => fs.unlinkSync(path), event.messageID);
-    } catch (e) {
-      console.error(e);
-      return api.sendMessage("❌ Failed to download the audio. Please try again later.", event.threadID, event.messageID);
-    }
-  },
-};
+      const searchResults = await ytSearch(songName);
+      const video = searchResults.videos[0];
 
-async function downloadFile(url, pathName) {
-  try {
-    const response = (await axios.get(url, { responseType: "arraybuffer" })).data;
-    fs.writeFileSync(pathName, Buffer.from(response));
-    return fs.createReadStream(pathName);
-  } catch (err) {
-    throw err;
+      if (!video) {
+        return api.setMessageReaction("🤷‍♂️", messageID, () => {}, true);
+      }
+
+      if (!fs.existsSync(cachePath)) fs.mkdirSync(cachePath);
+      const filePath = path.join(cachePath, `${video.videoId}.mp3`);
+
+      const downloadStream = ytdl(video.url, { filter: 'audioonly', quality: 'highestaudio' });
+      const fileStream = fs.createWriteStream(filePath);
+
+      downloadStream.pipe(fileStream);
+
+      fileStream.on('finish', async () => {
+        // هنا كيتصيفط الأوديو مع الكتابة والزخرفة
+        await api.sendMessage({
+          body: zypherBox("𝗣𝗟𝗔𝗬𝗜𝗡𝗚", 
+            `  ❯ 🎵 𝗧𝗜𝗧𝗟𝗘 : ${video.title}\n` +
+            `  ❯ ⏱️ 𝗧𝗜𝗠𝗘 : ${video.timestamp}\n` +
+            `  ❯ 👤 𝗔𝗥𝗧𝗜𝗦𝗧 : ${video.author.name}`),
+          attachment: fs.createReadStream(filePath)
+        }, threadID, () => {
+          fs.unlinkSync(filePath); // مسح الكاش
+          api.setMessageReaction("✅", messageID, () => {}, true);
+        }, messageID);
+      });
+
+      fileStream.on('error', (err) => {
+        console.error(err);
+        api.setMessageReaction("❌", messageID, () => {}, true);
+      });
+
+    } catch (error) {
+      console.error(error);
+      api.setMessageReaction("🆘", messageID, () => {}, true);
+    }
   }
-	    }
+};
