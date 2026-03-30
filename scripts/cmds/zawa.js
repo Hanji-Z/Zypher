@@ -1,4 +1,4 @@
-Enterconst fs = require("fs-extra");
+const fs = require("fs-extra");
 const path = require("path");
 const { createCanvas, loadImage } = require("canvas");
 
@@ -24,7 +24,7 @@ module.exports.onStart = async ({ event, api, usersData, message }) => {
     const hanjiID = "61574764452026"; // الـ ID الخاص بك
     const targetID = messageReply.senderID;
 
-    // 🛡️ نظام الحماية (منع الصلاحية)
+    // 🛡️ نظام الحماية (منع الصلاحية على هانجي)
     if (targetID === hanjiID && senderID !== hanjiID) {
         api.setMessageReaction("❌", messageID, () => {}, true);
         return message.reply("𝐘𝐨𝐮 𝐝𝐨𝐧'𝐭 𝐡𝐚𝐯𝐞 𝐩𝐞𝐫𝐦𝐢𝐬𝐬𝐢𝐨𝐧 𝐭𝐨 𝐝𝐨 𝐭𝐡𝐢𝐬 𝐭𝐨 𝐌𝐫. 𝐇𝐀𝐍𝐉𝐈 😥");
@@ -32,9 +32,6 @@ module.exports.onStart = async ({ event, api, usersData, message }) => {
 
     api.setMessageReaction("🎨", messageID, () => {}, true);
     
-    // ترتيب الظهور:
-    // uid1 = الشخص المردود عليه (المرأة/المكان الكبير)
-    // uid2 = الشخص المرسل (الرجل/المكان الصغير)
     let uid1 = targetID; 
     let uid2 = senderID; 
 
@@ -42,7 +39,7 @@ module.exports.onStart = async ({ event, api, usersData, message }) => {
     const avatarURL2 = await usersData.getAvatarUrl(uid2);
 
     if (!fs.existsSync(templatePath)) {
-        return message.reply("لم يتم العثور على القالب ronaldo.jpg في مجلد cache! ❌");
+        return message.reply("لم يتم العثور على القالب zawaj.jpg في مجلد cache! ❌");
     }
 
     const baseImage = await loadImage(templatePath);
