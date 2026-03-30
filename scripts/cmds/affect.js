@@ -8,7 +8,7 @@ module.exports = {
 		author: "𝗦𝗵𝗔𝗻",
 		countDown: 5,
 		role: 0,
-		shortDescription: "Affect image",
+		shortDescription: "Affect8 image",
 		longDescription: "Affect image",
 		category: "𝗜𝗠𝗔𝗚𝗘",
 		guide: {
