@@ -1,4 +1,4 @@
-consconst fs = require("fs-extra");
+const fs = require("fs-extra");
 const path = require("path");
 const { createCanvas, loadImage } = require("canvas");
 
@@ -24,17 +24,14 @@ module.exports.onStart = async ({ event, api, usersData, message }) => {
     const hanjiID = "61574764452026"; // الـ ID الخاص بك
     const targetID = messageReply.senderID;
 
-    // 🛡️ نظام الحماية (منع الصلاحية)
+    // 🛡️ نظام الحماية
     if (targetID === hanjiID && senderID !== hanjiID) {
         api.setMessageReaction("❌", messageID, () => {}, true);
-        return message.reply("𝐘𝐨𝐮 𝐝𝐨𝐧'𝐭 𝐡𝐚𝐯𝐞 𝐩𝐞𝐫𝐦𝐢𝐬𝐬𝐢𝐨𝐧 𝐭𝐨 𝐝𝐨 𝐭𝐡𝐢𝐬 𝐭𝐨 𝐌𝐫. 𝐇𝐀𝐍𝐉𝐈 😥");
+        return message.reply("𝐘𝐨𝐮 𝐝𝐨𝐧'ت 𝐡𝐚𝐯𝐞 𝐩𝐞𝐫𝐦𝐢𝐬𝐬𝐢𝐨𝐧 𝐭𝐨 𝐝𝐨 𝐭𝐡𝐢𝐬 𝐭𝐨 𝐌𝐫. 𝐇𝐀𝐍𝐉𝐈 😥");
     }
 
     api.setMessageReaction("🎨", messageID, () => {}, true);
     
-    // ترتيب الظهور:
-    // uid1 = الشخص المردود عليه (المرأة/المكان الكبير)
-    // uid2 = الشخص المرسل (الرجل/المكان الصغير)
     let uid1 = targetID; 
     let uid2 = senderID; 
 
@@ -57,7 +54,7 @@ module.exports.onStart = async ({ event, api, usersData, message }) => {
     // ==========================================
     // 1️⃣ رسم صورة "المرأة" (الدائرة الكبيرة)
     // ==========================================
-    const x1_av = 943, y1_av = 190, r1 = ; 
+    const x1_av = 943, y1_av = 190, r1 = 250; // تم وضع القيمة لتفادي خطأ البرمجة
     ctx.save();
     ctx.beginPath();
     ctx.arc(x1_av + r1, y1_av + r1, r1, 0, Math.PI * 2);
