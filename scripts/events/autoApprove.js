@@ -3,6 +3,7 @@ module.exports.config = {
   eventType: ["log:subscribe"],
   version: "2.0.0",
   author: "Hanji",
+  category: "events",
   description: "الموافقة التلقائية وتنشيط كل المجلدات (Inbox, Pending, Other)"
 };
 
