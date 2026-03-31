@@ -4,7 +4,7 @@ const path = require("path");
 module.exports = {
   config: {
     name: "help",
-    aliases: ["h", "cmds"],
+    aliases: ["h", "اوامر"],
     version: "4.5.0",
     author: "Zypher",
     countDown: 5,
