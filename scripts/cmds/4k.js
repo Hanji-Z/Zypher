@@ -1,4 +1,4 @@
-Enterconst axios = require("axios");
+const axios = require("axios");
 
 const mahmud = async () => {
   const base = await axios.get("https://raw.githubusercontent.com/mahmudx7/HINATA/main/baseApiUrl.json");
