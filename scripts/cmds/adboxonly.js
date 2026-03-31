@@ -1,4 +1,4 @@
-qu.exports = {
+qu8.exports = {
 	config: {
 		name: "onlyadminbox",
 		aliases: ["admchatonly", "adboxonly", "adminboxonly"],
