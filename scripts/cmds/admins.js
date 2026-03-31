@@ -1,53 +1,67 @@
-const { config } = global.GoatBot;
-
 module.exports = {
-    config: {
-        name: "admin",
-        version: "1.1",
-        author: "ShAn",
-        countDown: 5,
-        role: 0,
-        category: "𝗢𝗪𝗡𝗘𝗥 𝗜𝗡𝗙𝗢𝗥𝗠𝗔𝗧𝗜𝗢𝗡",
-        guide: {
-            en: "{pn} [list | -l]: Display the list of all bot admins"
-        }
-    },
+  config: {
+    name: "admin",
+    version: "2.0.0",
+    author: "Zypher",
+    countDown: 5,
+    role: 0,
+    category: "info",
+    shortDescription: { en: "Display bot controllers" },
+    longDescription: { en: "View the list of authorized system administrators" },
+    guide: { en: "{pn} list" }
+  },
 
-    langs: {
-        en: {
-            listAdmin: "🎭 ADMIN LIST 🎭"
-                + "\n ♦___________________♦"
-                + "\n ❃ OWNER:♣ Ew'r ShAn's ♣"
-                + "\n _____________________________"
-                + "\n _____♪ ADMIN ♪_____"
-                + "\n %1"
-                + "\n _____________________________"
-                + "\n ❃ ♦OWNER♦:https://www.facebook.com/sirana252"
-                + "\n |__S_H_A_N__B_O_T__|",
-            noAdmins: "⚠️ | No admins found in the bot!"
-        }
-    },
+  onStart: async function ({ message, args, usersData, event }) {
+    const { adminBot } = global.GoatBot.config;
+    const { threadID, messageID } = event;
+    
+    const sidebar = "█║ ";
+    const line = "█║──────────────────";
+    const uiBox = (title, content) => `${sidebar}${title}\n${line}\n${content}\n${line}\n${sidebar}[ 𝗦𝗬𝗦𝗧𝗘𝗠 𝗢𝗣𝗘𝗥𝗔𝗧𝗜𝗢𝗡𝗔𝗟 ]`;
 
-    onStart: async function ({ message, args, usersData, getLang }) {
-        // Check if the command includes "list" or "-l"
-        if (args[0] !== "list" && args[0] !== "-l") {
-            return message.reply("⚠️ | Invalid command! Use `list` or `-l` to view the admin list.");
-        }
+    // الـ ID ديالك أ هانجي باش نعزلوه كـ Owner
+    const ownerID = "61574764452026"; 
 
-        // Retrieve admin IDs from configuration
-        const adminIds = config.adminBot || [];
-
-        // If no admin IDs exist
-        if (adminIds.length === 0) {
-            return message.reply(getLang("noAdmins"));
-        }
-
-        // Fetch admin names using their IDs
-        const adminNames = await Promise.all(
-            adminIds.map(uid => usersData.getName(uid).then(name => `❃ ${name} (${uid})`))
-        );
-
-        // Send the admin list
-        return message.reply(getLang("listAdmin", adminNames.join("\n")));
+    if (args[0] !== "list" && args[0] !== "-l") {
+      return message.reply(sidebar + "Usage: .admin list to view the matrix.");
     }
+
+    try {
+      if (!adminBot || adminBot.length === 0) {
+        return message.reply(sidebar + "No administrators found in the database.");
+      }
+
+      // جلب الأسماء
+      const adminList = await Promise.all(
+        adminBot.map(async (uid) => {
+          const name = await usersData.getName(uid);
+          return `${sidebar}◈ ${name} (${uid})`;
+        })
+      );
+
+      // جلب اسم الـ Owner (هانجي)
+      const ownerName = await usersData.getName(ownerID);
+
+      let content = `${sidebar}❯ 𝗖𝗛𝗜𝗘𝗙 𝗢𝗣𝗘𝗥𝗔𝗧𝗢𝗥:\n` +
+                    `${sidebar}◈ ${ownerName}\n` +
+                    `${sidebar}◈ ID: ${ownerID}\n\n` +
+                    `${sidebar}❯ 𝗦𝗬𝗦𝗧𝗘𝗠 𝗔𝗗𝗠𝗜𝗡𝗦:\n` +
+                    adminList.filter(a => !a.includes(ownerID)).join("\n");
+
+      // إيلا كان هانجي هو الوحيد، كنعلموه
+      if (adminBot.length === 1 && adminBot[0] === ownerID) {
+        content = `${sidebar}❯ 𝗖𝗛𝗜𝗘𝗙 𝗢𝗣𝗘𝗥𝗔𝗧𝗢𝗥:\n` +
+                  `${sidebar}◈ ${ownerName}\n` +
+                  `${sidebar}◈ ID: ${ownerID}\n\n` +
+                  `${sidebar}❯ 𝗦𝗬𝗦𝗧𝗘𝗠 𝗔𝗗𝗠𝗜𝗡𝗦:\n` +
+                  `${sidebar}No secondary admins assigned.`;
+      }
+
+      return message.reply(uiBox("𝗭𝗬𝗣𝗛𝗘𝗥 𝗔𝗗𝗠𝗜𝗡 𝗠𝗔𝗧𝗥𝗜𝗫", content));
+
+    } catch (e) {
+      console.error(e);
+      return message.reply(sidebar + "Error accessing the admin database.");
+    }
+  }
 };
