@@ -1,17 +1,15 @@
+const axios = require("axios");
 const fs = require("fs-extra");
-const ytdl = require("@distube/ytdl-core");
 const ytSearch = require("yt-search");
 const path = require("path");
 
 module.exports = {
   config: {
     name: "song",
-    version: "2.3.0",
+    version: "3.0.0",
     author: "Zypher & Hanji",
     countDown: 5,
     role: 0,
-    shortDescription: { en: "Download music from YouTube" },
-    longDescription: { en: "Download high quality audio from YouTube silently" },
     category: "media",
     guide: { en: "{pn} [song name]" }
   },
@@ -20,59 +18,62 @@ module.exports = {
     const { threadID, messageID } = event;
     const songName = args.join(" ");
     const cachePath = path.join(__dirname, 'cache');
-
-    // ستايل الزخرفة ديال زيفر فـ النتيجة
     const zypherBox = (title, msg) => `[ 𝗭𝗬𝗣𝗛𝗘𝗥 - ${title} ]\n╼━━━━━━━━━━━━━━━━━━━━╾\n${msg}\n╼━━━━━━━━━━━━━━━━━━━━╾\n[ 𝗔𝗖𝗖𝗘𝗦𝗦 𝗚𝗥𝗔𝗡𝗧𝗘𝗗 - 𝗛𝗔𝗡𝗝𝗜 ]`;
 
-    if (!songName) {
-      return api.setMessageReaction("⚠️", messageID, (err) => {}, true);
-    }
+    if (!songName) return api.setMessageReaction("⚠️", messageID, () => {}, true);
 
-    // صامت: إيموجي الانتظار
-    api.setMessageReaction("⏳", messageID, (err) => {}, true);
+    api.setMessageReaction("⏳", messageID, () => {}, true);
 
     try {
+      // 1. البحث عن الأغنية
       const searchResults = await ytSearch(songName);
       const video = searchResults.videos[0];
+      if (!video) return api.setMessageReaction("🤷‍♂️", messageID, () => {}, true);
 
-      if (!video) {
-        return api.setMessageReaction("🤷‍♂️", messageID, (err) => {}, true);
-      }
+      // 2. استخدام Pro API للتحويل (بإستعمال محرك yt-dlp الخارجي)
+      // غانخدمو بـ API كيعطي رابط مباشر للملف
+      const res = await axios.get(`https://api.vkrdown.com/api/get.php?url=${video.url}`);
+      
+      // ملاحظة: هاد الـ API هو مثال، كاينين بزاف بحال Cobalt ولا Private APIs
+      const downloadUrl = res.data.data.find(f => f.format === "mp3" || f.ext === "mp3")?.url 
+                        || res.data.data[0].url;
+
+      if (!downloadUrl) throw new Error("Could not fetch download link");
 
       if (!fs.existsSync(cachePath)) fs.mkdirSync(cachePath);
-      const filePath = path.join(cachePath, `${video.videoId}.mp3`);
+      const filePath = path.join(cachePath, `${Date.now()}.mp3`);
 
-      // التحميل باستعمال @distube/ytdl-core اللي عندك فـ الباكج
-      const downloadStream = ytdl(video.url, { 
-        filter: 'audioonly', 
-        quality: 'highestaudio',
-        highWaterMark: 1 << 25 
+      // 3. تحميل الملف للسيرفر (Railway) ديريكت
+      const response = await axios({
+        method: 'get',
+        url: downloadUrl,
+        responseType: 'stream'
       });
-      const fileStream = fs.createWriteStream(filePath);
 
-      downloadStream.pipe(fileStream);
+      const writer = fs.createWriteStream(filePath);
+      response.data.pipe(writer);
 
-      fileStream.on('finish', async () => {
+      writer.on('finish', async () => {
+        // 4. الإرسال بـ الهيبة د زيفر
         await api.sendMessage({
           body: zypherBox("𝗣𝗟𝗔𝗬𝗜𝗡𝗚", 
             `  ❯ 🎵 𝗧𝗜𝗧𝗟𝗘 : ${video.title}\n` +
             `  ❯ ⏱️ 𝗧𝗜𝗠𝗘 : ${video.timestamp}\n` +
-            `  ❯ 👤 𝗔𝗥𝗧𝗜𝗦𝗧 : ${video.author.name}`),
+            `  ❯ 🔗 𝗦𝗢𝗨𝗥𝗖𝗘 : YouTube (Pro API)`),
           attachment: fs.createReadStream(filePath)
         }, threadID, () => {
-          fs.unlinkSync(filePath); // تنظيف الكاش
-          api.setMessageReaction("✅", messageID, (err) => {}, true);
+          if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+          api.setMessageReaction("✅", messageID, () => {}, true);
         }, messageID);
       });
 
-      downloadStream.on('error', (err) => {
-        console.error(err);
-        api.setMessageReaction("❌", messageID, (err) => {}, true);
-      });
+      writer.on('error', (err) => { throw err; });
 
     } catch (error) {
       console.error(error);
-      api.setMessageReaction("🆘", messageID, (err) => {}, true);
+      api.setMessageReaction("❌", messageID, () => {}, true);
+      // إيلا فشل الـ API الأول، كاين ديما Plan B
+      api.sendMessage(zypherBox("𝗦𝗬𝗦𝗧𝗘𝗠-𝗘𝗥𝗥𝗢𝗥", "❯ ❌ السيرفر ديال التحميل عليه الضغط، جرب مرة خرى!"), threadID, messageID);
     }
   }
 };
