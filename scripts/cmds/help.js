@@ -1,145 +1,110 @@
 const fs = require("fs-extra");
-const axios = require("axios");
 const path = require("path");
-const { getPrefix } = global.utils;
-const { commands, aliases } = global.GoatBot;
 
 module.exports = {
   config: {
     name: "help",
-    version: "1.18",
-    author: "ShAn", 
+    aliases: ["h", "cmds"],
+    version: "4.5.0",
+    author: "Zypher",
     countDown: 5,
     role: 0,
-    shortDescription: {
-      en: "View command usage",
-    },
-    longDescription: {
-      en: "View command usage and list all commands or commands by category",
-    },
     category: "info",
-    guide: {
-      en: "{pn} / help cmdName\n{pn} -c <categoryName>",
-    },
+    shortDescription: { en: "Advanced interactive command center" },
+    longDescription: { en: "Mainframe style help with category modules and reply support" },
+    guide: { en: "{pn} | {pn} [category] | {pn} [command]" },
     priority: 1,
   },
 
-  onStart: async function ({ message, args, event, threadsData, role }) {
-    const { threadID } = event;
-    const threadData = await threadsData.get(threadID);
-    const prefix = getPrefix(threadID);
-
-    if (args.length === 0) {
-      const categories = {};
-      let msg = "";
-
-      msg += `╔══════════════╗\n🔹 COMMAND LIST 🔹\n╚══════════════╝\n`;
-
-      for (const [name, value] of commands) {
-        if (value.config.role > 1 && role < value.config.role) continue;
-
-        const category = value.config.category || "Uncategorized";
-        categories[category] = categories[category] || { commands: [] };
-        categories[category].commands.push(name);
-      }
-
-      Object.keys(categories).forEach((category) => {
-        if (category !== "info") {
-          msg += `\n╭────────────⭓\n│『 ${category.toUpperCase()} 』`;
-
-          const names = categories[category].commands.sort();
-          names.forEach((item) => {
-            msg += `\n│💠${item}💠`;
-          });
-
-          msg += `\n╰────────⭓`;
-        }
-      });
-
-      const totalCommands = commands.size;
-      msg += `\n𝗖𝘂𝗿𝗿𝗲𝗻𝘁𝗹𝘆, 𝘁𝗵𝗲 𝗯𝗼𝘁 𝗵𝗮𝘀 ${totalCommands} 𝗰𝗼𝗺𝗺𝗮𝗻𝗱𝘀 𝘁𝗵𝗮𝘁 𝗰𝗮𝗻 𝗯𝗲 𝘂𝘀𝗲𝗱\n`;
-      msg += `\n𝗧𝘆𝗽𝗲 ${prefix}𝗵𝗲𝗹𝗽 𝗰𝗺𝗱𝗡𝗮𝗺𝗲 𝘁𝗼 𝘃𝗶𝗲𝘄 𝘁𝗵𝗲 𝗱𝗲𝘁𝗮𝗶𝗹𝘀 𝗼𝗳 𝘁𝗵𝗮𝘁 𝗰𝗼𝗺𝗺𝗮𝗻𝗱\n`;
-      msg += `\n🫧𝘽𝙊𝙏 𝙉𝘼𝙈𝙀🫧: ♡mbasic♡`;
-      msg += `\n🔹 𝘽𝙊𝙏 𝙊𝙒𝙉𝙀𝙍 🔹`;
-      msg += `\n 	 					`;
-      msg += `\n~𝙉𝘼𝙈𝙀:✰ 'I G R I S ✰`;
-      msg += `\n~𝙁𝘽: ヾᎻᾶ︩︪ɳjıꜝ 漢.🗞💙⤸🪽`;
-
-      await message.reply({
-        body: msg,
-      });
-    } else if (args[0] === "-c") {
-      if (!args[1]) {
-        await message.reply("Please specify a category name.");
-        return;
-      }
-
-      const categoryName = args[1].toLowerCase();
-      const filteredCommands = Array.from(commands.values()).filter(
-        (cmd) => cmd.config.category?.toLowerCase() === categoryName
-      );
-
-      if (filteredCommands.length === 0) {
-        await message.reply(`No commands found in the category "${categoryName}".`);
-        return;
-      }
-
-      let msg = `╔══════════════╗\n🔹 ${categoryName.toUpperCase()} COMMANDS 🔹\n╚══════════════╝\n`;
-
-      filteredCommands.forEach((cmd) => {
-        msg += `\n💠 ${cmd.config.name} 💠`;
-      });
-
-      await message.reply(msg);
-    } else {
-      const commandName = args[0].toLowerCase();
-      const command = commands.get(commandName) || commands.get(aliases.get(commandName));
-
-      if (!command) {
-        await message.reply(`Command "${commandName}" not found.`);
-      } else {
-        const configCommand = command.config;
-        const roleText = roleTextToString(configCommand.role);
-        const author = configCommand.author || "Unknown";
-
-        const longDescription = configCommand.longDescription
-          ? configCommand.longDescription.en || "No description"
-          : "No description";
-
-        const guideBody = configCommand.guide?.en || "No guide available.";
-        const usage = guideBody.replace(/{p}/g, prefix).replace(/{n}/g, configCommand.name);
-
-        const response = `╭── NAME ────⭓\n` +
-          `│ ${configCommand.name}\n` +
-          `├── INFO\n` +
-          `│ Description: ${longDescription}\n` +
-          `│ Other names: ${configCommand.aliases ? configCommand.aliases.join(", ") : "Do not have"}\n` +
-          `│ Version: ${configCommand.version || "1.0"}\n` +
-          `│ Role: ${roleText}\n` +
-          `│ Time per command: ${configCommand.countDown || 1}s\n` +
-          `│ Author: ${author}\n` +
-          `├── Usage\n` +
-          `│ ${usage}\n` +
-          `├── Notes\n` +
-          `│ The content inside <ShAn> can be changed\n` +
-          `│ The content inside [a|b|c] is a or b or c\n` +
-          `╰━━━━━━━❖`;
-
-        await message.reply(response);
-      }
-    }
+  onStart: async function ({ api, message, args, event, role }) {
+    const { threadID, messageID } = event;
+    const prefix = global.utils.getPrefix(threadID);
+    
+    return this.renderHelp({ api, message, args, event, role, prefix });
   },
-};
 
-function roleTextToString(roleText) {
-  switch (roleText) {
-    case 0:
-      return "0 (All users)";
-    case 1:
-      return "1 (Group administrators)";
-    case 2:
-      return "2 (Admin bot)";
-    default:
-      return "Unknown role";
-  }
+  onReply: async function ({ api, message, event, Reply, role }) {
+    const { threadID, messageID, body } = event;
+    const prefix = global.utils.getPrefix(threadID);
+    
+    // إيلا جاوب بنادم على الميساج، كنعتبرو الرد هو الـ "args"
+    const args = body.split(" ");
+    return this.renderHelp({ api, message, args, event, role, prefix });
+  },
+
+  renderHelp: async function ({ api, message, args, event, role, prefix }) {
+    const { threadID, messageID } = event;
+    const { commands, aliases } = global.GoatBot;
+    const gifPath = path.join(__dirname, "cache", "help.gif");
+    
+    const sidebar = "█║ ";
+    const line = "█║──────────────────";
+    const uiBox = (title, content) => `${sidebar}${title}\n${line}\n${content}\n${line}\n${sidebar}[ 𝗦𝗬𝗦𝗧𝗘𝗠 𝗢𝗣𝗘𝗥𝗔𝗧𝗜𝗢𝗡𝗔𝗟 ]`;
+
+    // 1. تجميع الأوامر
+    const categories = {};
+    commands.forEach((value, key) => {
+      if (value.config.role > 0 && role < value.config.role) return;
+      const cat = value.config.category || "General";
+      if (!categories[cat]) categories[cat] = [];
+      categories[cat].push(key);
+    });
+
+    const input = args[0]?.toLowerCase();
+
+    // --- CASE A: Landing Page (Categories List) ---
+    if (!input) {
+      let catList = `${sidebar}❯ 𝗠𝗢𝗗𝗨𝗟𝗘𝗦: ${Object.keys(categories).length} Operational\n` +
+                    `${sidebar}❯ 𝗨𝗡𝗜𝗧𝗦: ${commands.size} Active\n${line}\n`;
+
+      Object.keys(categories).sort().forEach(cat => {
+        catList += `${sidebar}◈ [ ${cat.toUpperCase()} ]\n`;
+      });
+
+      catList += `\n${sidebar}💡 𝗥𝗲𝗽𝗹𝘆 with a category name\n` +
+                 `${sidebar}📑 Type: ${prefix}help [command]`;
+
+      const sendData = { body: uiBox("𝗭𝗬𝗣𝗛𝗘𝗥 𝗠𝗔𝗜𝗡𝗙𝗥𝗔𝗠𝗘", catList) };
+      if (fs.existsSync(gifPath)) sendData.attachment = fs.createReadStream(gifPath);
+
+      return message.reply(sendData, (err, info) => {
+        // تسجيل الـ Reply باش البوت يعرف يجاوب عليه
+        global.GoatBot.onReply.set(info.messageID, {
+          commandName: this.config.name,
+          messageID: info.messageID,
+          author: event.senderID
+        });
+      });
     }
+
+    // --- CASE B: View Specific Category ---
+    const actualCat = Object.keys(categories).find(k => k.toLowerCase() === input);
+    if (actualCat) {
+      const cmds = categories[actualCat].sort();
+      let cmdGrid = `${sidebar}❯ 𝗠𝗢𝗗𝗨𝗟𝗘: ${actualCat.toUpperCase()}\n${line}\n`;
+      
+      for (let i = 0; i < cmds.length; i += 3) {
+        const row = cmds.slice(i, i + 3).map(c => `⧉ ${c.padEnd(8)}`).join(" ");
+        cmdGrid += `${sidebar}${row}\n`;
+      }
+      
+      return message.reply(uiBox("𝗗𝗔𝗧𝗔 𝗦𝗧𝗥𝗘𝗔𝗠", cmdGrid));
+    }
+
+    // --- CASE C: Command Details ---
+    const command = commands.get(input) || commands.get(aliases.get(input));
+    if (command) {
+      const { config } = command;
+      let details = `${sidebar}◈ 𝗡𝗔𝗠𝗘: ${config.name}\n` +
+                    `${sidebar}◈ 𝗖𝗔𝗧𝗘𝗚𝗢𝗥𝗬: ${config.category || "General"}\n` +
+                    `${sidebar}◈ 𝗗𝗘𝗦𝗖: ${config.shortDescription?.en || "N/A"}\n` +
+                    line + "\n" +
+                    `${sidebar}💡 𝗨𝗦𝗔𝗚𝗘:\n` +
+                    `${sidebar}${ (config.guide?.en || "").replace(/{pn}/g, prefix + config.name) }`;
+      
+      return message.reply(uiBox("𝗨𝗡𝗜𝗧 𝗗𝗘𝗧𝗔𝗜𝗟𝗦", details));
+    }
+
+    return message.reply(sidebar + `Access Denied: "${input}" not recognized.`);
+  }
+};
