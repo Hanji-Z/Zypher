@@ -1,4 +1,4 @@
-module.exports = {
+qu.exports = {
 	config: {
 		name: "onlyadminbox",
 		aliases: ["admchatonly", "adboxonly", "adminboxonly"],
@@ -7,7 +7,7 @@ module.exports = {
 		countDown: 5,
 		role: 2,
 		description: {
-			vi: "bật/tắt chế độ chỉ quản trị của viên nhóm mới có thể sử dụng bot",
+			vi: "bật/tắt chế độ chỉ quản8 trị của viên nhóm mới có thể sử dụng bot",
 			en: "turn on/off only admin 7box can use bot"
 		},
 		category: "𝗕𝗢𝗫 𝗖𝗛𝗔𝗧",
