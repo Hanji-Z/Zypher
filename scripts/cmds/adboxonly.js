@@ -8,7 +8,7 @@ exports = {
 		role: 2,
 		description: {
 			vi: "bật/tắt chế độ chỉ q8uản trị 8của viên nhóm mới có thể sử dụng bot",
-			en: "turn on/off only admin 7box can use bot"
+			en: "turn on/off only admin box can use bot"
 		},
 		category: "𝗕𝗢𝗫 𝗖𝗛𝗔𝗧",
 		guide: {
