@@ -11,7 +11,7 @@ module.exports = {
 		description: {
 			en: "Anti change info box - Original Logic with 🥴 reaction"
 		},
-		category: "𝗕𝗢𝗫 𝗖𝗛𝗔𝗧",
+		category: "GROUP",
 		guide: {
 			en: "   {pn} avt [on | off]\n   {pn} name [on | off]\n   {pn} nc [on | off]"
 		}
