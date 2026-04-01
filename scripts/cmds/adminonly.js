@@ -13,7 +13,7 @@ module.exports = {
 		description: {
 			en: "وضع المسؤولين فقط - تفاعل صامت بالجمجمة"
 		},
-		category: "𝗕𝗢𝗧 𝗠𝗔𝗡𝗔𝗚𝗘𝗠𝗘𝗡𝗧",
+		category: "SYSTEM",
 		guide: {
 			en: "{pn} [on | off] أو {pn} noti [on | off]"
 		}
