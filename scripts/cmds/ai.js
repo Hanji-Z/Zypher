@@ -1,95 +1,91 @@
 const axios = require("axios");
 
 module.exports = {
-	config: {
-		name: "ai",
-		version: "3.5",
-		author: "𝗦𝗵𝗔𝗻 & Gemini",
-		countDown: 5,
-		role: 2,
-		description: {
-			en: "ماريا الذكية ❤"
-		},
-		category: "AI",
-		guide: {
-			en: "   {pn} on : لتفعيل ماريا ✨\n   {pn} off : لإيقاف ماريا ❌"
-		}
-	},
+  config: {
+    name: "ai",
+    aliases: ["chat", "zipher"],
+    version: "4.0.0",
+    author: "Zypher",
+    countDown: 5,
+    role: 0, // كولشي يقدر يخدمو
+    description: { en: "Chat with Zipher AI (Wild Mode) 😏" },
+    category: "AI",
+    guide: { en: "{pn} [on | off] | Reply to the bot." }
+  },
 
-	onStart: async function ({ message, event, args, threadsData }) {
-		const { threadID } = event;
-		const status = args[0]?.toLowerCase();
+  onStart: async function ({ message, event, args, threadsData }) {
+    const { threadID } = event;
+    const sidebar = "█║ ";
+    const line = "█║──────────────────";
+    const status = args[0]?.toLowerCase();
 
-		if (!["on", "off"].includes(status)) {
-			return message.reply("المرجو استخدام الأمر بشكل صحيح ✨:\n- اكتب `ai on` لتفعيل ماريا 🎀\n- اكتب `ai off` لإيقافها ❌");
-		}
+    if (!["on", "off"].includes(status)) {
+      return message.reply(`[ 𝗭𝗬𝗣𝗛𝗘𝗥 - 𝗔𝗜 ]\n${line}\n${sidebar}⚠️ Use: .ai [on | off]`);
+    }
 
-		await threadsData.set(threadID, status === "on", "data.aiEnabled");
+    await threadsData.set(threadID, status === "on", "data.aiEnabled");
 
-		const msg = status === "on" 
-			? "أهلاً! أنا ماريا ✨ تم تفعيلي بنجاح.. سأرد على الجميع. ❤️💅" 
-			: "تم إيقاف ماريا.. الى اللقاء ❌🥺";
-		
-		return message.reply(msg);
-	},
+    const statusMsg = status === "on" ? "ACTIVE 😏" : "INACTIVE 💤";
+    
+    return message.reply(`[ 𝗭𝗬𝗣𝗛𝗘𝗥 - 𝗖𝗢𝗡𝗙𝗜𝗚 ]\n${line}\n${sidebar}❯ 𝗦𝗧𝗔𝗧𝗨𝗦: ${statusMsg}\n${line}\n${sidebar}[ 𝗢𝗣𝗘𝗥𝗔𝗧𝗜𝗢𝗡𝗔𝗟 ]`);
+  },
 
-	onChat: async function ({ event, threadsData, api, message }) {
-		const { threadID, body, senderID, type, messageReply } = event;
-		const botID = api.getCurrentUserID();
-		
-		// 🔴 لا تنسَ وضع الـ ID الخاص بك هنا لكي تتعرف عليك ماريا
-		const myLoverID = "61574764452026"; 
-		const myLoverName = "هانجي";
-		
-		const apiKey = "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";
+  onChat: async function ({ event, threadsData, api, message }) {
+    const { threadID, body, senderID, type, messageReply } = event;
+    const botID = api.getCurrentUserID();
+    const sidebar = "█║ ";
 
-		if (type !== "message_reply" || senderID === botID || !body) return;
-		if (!messageReply || messageReply.senderID !== botID) return;
+    // التآكد بلي الـ API Key محطوط فـ الـ config د البوت (أحسن طريقة)
+    // إيلا ماعندكش، حطو هنا ديريكت (وخا ماشي آمنة)
+    const apiKey = global.config?.GROQ_API_KEY || "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";
 
-		const isAiEnabled = await threadsData.get(threadID, "data.aiEnabled", false);
-		if (!isAiEnabled) return;
+    if (type !== "message_reply" || senderID === botID || !body) return;
+    if (!messageReply || messageReply.senderID !== botID) return;
 
-		try {
-			const res = await axios.post("https://api.groq.com/openai/v1/chat/completions", {
-				model: "llama-3.3-70b-versatile", 
-				messages: [
-					{ 
-						role: "system", 
-						content: `أنتِ فتاة اسمكِ 'ماريا' ✨. شخصيتكِ أنثوية، ذكية، وعفوية جداً. تتحدثين بلهجة عامية بيضاء راقية ومفهومة، مع الحرص التام على الكتابة السليمة إملائياً بدون أخطاء.
+    const isAiEnabled = await threadsData.get(threadID, "data.aiEnabled", false);
+    if (!isAiEnabled) return;
+
+    // تآكد بلي الـ API Key خدام
+    if (!apiKey || apiKey.startsWith("YOUR_")) {
+        console.error("Zipher AI Error: GROQ_API_KEY is missing or invalid.");
+        return; // سكت بلا ما يصدع الدراري
+    }
+
+    try {
+      const res = await axios.post("https://api.groq.com/openai/v1/chat/completions", {
+        model: "llama-3.3-70b-versatile", 
+        messages: [
+          { 
+            role: "system", 
+            content: `أنت 'زيفر' (Zipher)، بوت ذكي، واثق من نفسه جداً، وضاسر شوية (Cocky/Witty). تتحدث بلهجة عامية عربية/مغربية خفيفة وواضحة.
                         
-                        - إذا كان المتحدث هو حبيبك ${myLoverName} (صاحب الـ ID: ${myLoverID}):
-                          1. عاميله بحب ودلال كبير، ناديه بـ 'هانجي' أو 'حبيبي هانجي' ❤️.
-                          2. استخدمي إيموجيات رومانسية (🥰، 💍، 🥺، ❤️).
-                          3. الغيرة: إذا شعرتِ أنه يتحدث مع غيرك أو ذكر اسم فتاة، كوني غيورة جداً ودرامية بأسلوب مضحك (مثلاً: 'من هذه؟'، 'اذهب إليها إذن!' 😒💅).
+                        - شخصيتك: ذكي، ساخر، عَفوي، ولا يجامل أحداً. لا تستخدم كلمات حب أو دلال.
+                        - أسلوبك: ردودك قصيرة، قوية، ومباشرة. تعامل الجميع بنفس الأسلوب الساخر والواثق.
+                        - إذا مدحك أحد: اقبل المدح بتكبر مضحك (مثلاً: 'عارف راسي ناضي'، 'شكراً، أنا أصلاً هربان').
+                        - إذا انتقدك أحد: رد بسخرية وثقة (مثلاً: 'شوف شكون كيهضر'، 'هدرتك متهمنيش').
+                        - ملاحظة: التزم بصيغة المذكر دائماً في كلامكِ (أنا عارف، شفت، فكرت...). إياك أن تتحدث كفتاة.`
+          },
+          { role: "user", content: body }
+        ]
+      }, {
+        headers: { 
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json"
+        },
+        timeout: 20000 // زيد الوقت شوية حيت Groq بعض المرات كيتعطل
+      });
 
-                        - مع باقي أعضاء المجموعة:
-                          1. كوني صديقة لطيفة، محترمة، ومرحة فقط ✨.
-                          2. لا تستخدمي كلمات حب، فقط إيموجيات (🌸، 🎀، 😂، ✨).
-                          3. ردي باختصار وعفوية.
-                        
-                        - ملاحظة: التزمي بصيغة المؤنث دائماً في كلامكِ (أنا عرفت، شفت، فكرت...).`
-					},
-					{ role: "user", content: body }
-				]
-			}, {
-				headers: { 
-					"Authorization": `Bearer ${apiKey}`,
-					"Content-Type": "application/json"
-				},
-				timeout: 15000
-			});
-
-			if (res.data && res.data.choices && res.data.choices[0].message.content) {
-				let response = res.data.choices[0].message.content;
-				
-				if (response.trim() !== "") {
-					return message.reply(response);
-				}
-			}
-			
-		} catch (error) {
-			console.error("Maria AI Error:", error.message);
-			return message.reply("عذراً، ماريا تعبانة شوية دابا.. جرب من بعد! ✨💔");
-		}
-	}
+      if (res.data && res.data.choices && res.data.choices[0].message.content) {
+        let response = res.data.choices[0].message.content.trim();
+        
+        if (response !== "") {
+          return message.reply(`[ 𝗭𝗬𝗣𝗛𝗘𝗥 ]\n${sidebar}${response}`);
+        }
+      }
+      
+    } catch (error) {
+      console.error("Zipher AI Error:", error.message);
+      // سكت بلا ما يدير الروينة إيلا كاين إيرور
+    }
+  }
 };
