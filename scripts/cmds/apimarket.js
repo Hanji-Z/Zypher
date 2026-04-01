@@ -1,66 +1,60 @@
 const axios = require('axios');
 
 module.exports = {
-	config: {
-		name: "apimarket",
-		aliases: ["apimarket"],
-		author: "Jonell Magallanes & kshitiz",
-		version: "2.0",
-		cooldowns: 5,
-		role: 0,
-		shortDescription: {
-			en: ""
-		},
-		longDescription: {
-			en: "Search API endpoints via market command"
-		},
-		category: "𝗠𝗔𝗥𝗞𝗘𝗧",
-		guide: {
-			en: "{p}{n}/{p} name "
-		}
-	},
-	onStart: async function ({ api, event }) {
-		const args = event.body.split(" ").slice(1);
-		const query = args.join(" ");
+  config: {
+    name: "apimarket",
+    aliases: ["api", "market"],
+    version: "2.1.0",
+    author: "Zypher",
+    countDown: 5,
+    role: 2,
+    category: "SYSTEM", // حطيناه فـ SYSTEM باش يتجمع المنيو
+    shortDescription: { en: "Search for available APIs for developers" },
+    guide: { en: "{pn} | {pn} [search query]" }
+  },
 
-		if (!query) {
+  onStart: async function ({ api, event, args }) {
+    const { threadID, messageID } = event;
+    const sidebar = "█║ ";
+    const line = "█║──────────────────";
+    const query = args.join(" ");
 
-			const availableApis = await getAvailableAPIs();
-			const apiListMessage = `🛒 Available APIs:\n\n${availableApis.join("\n")}`;
-			return api.sendMessage(apiListMessage, event.threadID);
-		}
+    const baseUrl = "https://api-market-by-jonell-cc.hutchin.repl.co/market";
 
-		const apiUrl = `https://api-market-by-jonell-cc.hutchin.repl.co/market/?search=${encodeURIComponent(query)}`;
+    try {
+      api.setMessageReaction("🛒", messageID, () => {}, true);
 
-		try {
-			const response = await axios.get(apiUrl);
-			const searchResults = response.data;
+      // --- Case 1: List all APIs ---
+      if (!query) {
+        const response = await axios.get(baseUrl);
+        const list = response.data.map((item, i) => `${sidebar}${i + 1}. ${item.name}`).join("\n");
+        
+        let msg = `[ 𝗭𝗬𝗣𝗛𝗘𝗥 - 𝗔𝗣𝗜 𝗟𝗜𝗦𝗧 ]\n${line}\n${list}\n${line}\n${sidebar}💡 Search: .api [name]`;
+        return api.sendMessage(msg, threadID, messageID);
+      }
 
-			if (searchResults.length === 0) {
-				return api.sendMessage("No results found for your search.", event.threadID);
-			}
+      // --- Case 2: Search for specific API ---
+      const searchUrl = `${baseUrl}/?search=${encodeURIComponent(query)}`;
+      const searchRes = await axios.get(searchUrl);
+      const results = searchRes.data;
 
-			let message = '🛒 Market Api Search Results:\n\n';
-			searchResults.forEach((result, index) => {
-				message += `${index + 1}. Name:${result.name}\n\nDescription:${result.description}\n\nEndpoint: ${result.link}\n\nApiOwner:${result.ApiOwner}\n\n==============================\n\n`;
-			});
+      if (!results || results.length === 0) {
+        return api.sendMessage(sidebar + "❌ No APIs found for: " + query, threadID, messageID);
+      }
 
-			api.sendMessage(message, event.threadID);
-		} catch (error) {
-			console.error(error);
-			api.sendMessage("An error occurred while trying to search the market.", event.threadID);
-		}
-	}
+      let resMsg = `[ 𝗠𝗔𝗥𝗞𝗘𝗧 𝗥𝗘𝗦𝗨𝗟𝗧𝗦 ]\n${line}\n`;
+      results.forEach((res, i) => {
+        resMsg += `${sidebar}❯ **Name**: ${res.name}\n` +
+                  `${sidebar}❯ **Owner**: ${res.ApiOwner}\n` +
+                  `${sidebar}❯ **Link**: ${res.link}\n` +
+                  `${sidebar}❯ **Desc**: ${res.description}\n${line}\n`;
+      });
+
+      return api.sendMessage(resMsg, threadID, messageID);
+
+    } catch (error) {
+      console.error(error);
+      return api.sendMessage(sidebar + "🚫 Market server is down.", threadID, messageID);
+    }
+  }
 };
-
-
-async function getAvailableAPIs() {
-	try {
-		const response = await axios.get('https://api-market-by-jonell-cc.hutchin.repl.co/market');
-		const availableApis = response.data.map(api => api.name);
-		return availableApis;
-	} catch (error) {
-		console.error(error);
-		return [];
-	}
-}
