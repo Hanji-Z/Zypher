@@ -1,59 +1,58 @@
 const DIG = require("discord-image-generation");
 const fs = require("fs-extra");
+const path = require("path");
 
 module.exports = {
   config: {
     name: "ads",
-    version: "1.0",
-    author: "𝗦𝗵𝗔𝗻",
-    countDown: 1,
+    version: "1.1.0",
+    author: "Zypher",
+    countDown: 5,
     role: 0,
-    shortDescription: "𝗔𝗱𝘃𝗲𝗿𝘁𝗶𝘀𝗲𝗺𝗲𝗻𝘁!",
-    longDescription: "",
-    category: "𝗙𝗨𝗡𝗡𝗬",
-    guide: "{pn} [mention|leave_blank]",
-    envConfig: {
-      deltaNext: 5
-    }
+    shortDescription: { en: "Create an advertisement meme" },
+    category: "FUN", // رديناها FUN باش يتجمع المنيو
+    guide: { en: "{pn} | {pn} @mention | Reply to a message" }
   },
 
-  langs: {
-    vi: {
-      noTag: "Bạn phải tag người bạn muốn tát"
-    },
-    en: {
-      noTag: "You must tag the person you want to "
-    }
-  },
-
-  onStart: async function ({ event, message, usersData, args, getLang }) {
-    let mention = Object.keys(event.mentions)
+  onStart: async function ({ event, message, usersData }) {
+    const { threadID, messageID, senderID, messageReply, mentions } = event;
+    const sidebar = "█║ ";
+    
+    // تحديد الـ UID: يا إما Reply، يا إما Mention، يا إما الشخص براسو
     let uid;
-
-    if (event.type == "message_reply") {
-      uid = event.messageReply.senderID
+    if (messageReply) {
+      uid = messageReply.senderID;
+    } else if (Object.keys(mentions).length > 0) {
+      uid = Object.keys(mentions)[0];
     } else {
-      if (mention[0]) {
-        uid = mention[0]
-      } else {
-        console.log(" jsjsj")
-        uid = event.senderID
-      }
+      uid = senderID;
     }
 
-    let url = await usersData.getAvatarUrl(uid)
-    let avt = await new DIG.Ad().getImage(url)
+    try {
+      let avatarUrl = await usersData.getAvatarUrl(uid);
+      
+      // صنع الصورة باستعمال مكتبة DIG
+      let adImage = await new DIG.Ad().getImage(avatarUrl);
 
-    const pathSave = `${__dirname}/tmp/ads.png`;
-    fs.writeFileSync(pathSave, Buffer.from(avt));
+      // تأكد بلي فولدر tmp كاين باش ما يوقعش crash
+      const tmpPath = path.join(__dirname, "tmp");
+      if (!fs.existsSync(tmpPath)) fs.mkdirSync(tmpPath);
+      
+      const pathSave = path.join(tmpPath, `ads_${uid}.png`);
+      fs.writeFileSync(pathSave, Buffer.from(adImage));
 
-    let body = "Latest Brand In The Market 🥳"
-    if (!mention[0]) body = "Latest Brand In The Market 🥳"
+      const body = "✨ Latest Brand In The Market! 🥳";
 
-    // Send the image as a reply to the command message
-    message.reply({
-      body: body,
-      attachment: fs.createReadStream(pathSave)
-    }, () => fs.unlinkSync(pathSave));
+      return message.reply({
+        body: `[ 𝗭𝗬𝗣𝗛𝗘𝗥 - 𝗔𝗗𝗦 ]\n${sidebar}${body}`,
+        attachment: fs.createReadStream(pathSave)
+      }, () => {
+        if (fs.existsSync(pathSave)) fs.unlinkSync(pathSave);
+      });
+
+    } catch (e) {
+      console.error(e);
+      return message.reply(sidebar + "❌ Error: Could not generate advertisement.");
+    }
   }
 };
