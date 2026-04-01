@@ -2,67 +2,68 @@ const itunes = require("searchitunes");
 const { getStreamFromURL } = global.utils;
 
 module.exports = {
-	config: {
-		name: "appstore",
-		version: "1.2",
-		author: "NTKhang",
-		countDown: 5,
-		role: 0,
-		description: {
-			vi: "Tìm app trên appstore",
-			en: "Search app on appstore"
-		},
-		category: "software",
-		guide: "   {pn}: <keyword>"
-			+ "\n   - Example:"
-			+ "\n   {pn} PUBG",
-		envConfig: {
-			limitResult: 3
-		}
-	},
+  config: {
+    name: "appstore",
+    aliases: ["app", "ios"],
+    version: "1.3.0",
+    author: "Zypher",
+    countDown: 5,
+    role: 0,
+    category: "SYSTEM", // مجموع مع أدوات البحث والسيستيم
+    shortDescription: { en: "Search for iOS apps on App Store" },
+    guide: { en: "{pn} [app name]" }
+  },
 
-	langs: {
-		vi: {
-			missingKeyword: "Bạn chưa nhập từ khóa",
-			noResult: "Không tìm thấy kết quả nào cho từ khóa %1"
-		},
-		en: {
-			missingKeyword: "You haven't entered any keyword",
-			noResult: "No result found for keyword %1"
-		}
-	},
+  onStart: async function ({ message, args, api, event }) {
+    const { threadID, messageID } = event;
+    const sidebar = "█║ ";
+    const line = "█║──────────────────";
+    const keyword = args.join(" ");
 
-	onStart: async function ({ message, args, commandName, envCommands, getLang }) {
-		if (!args[0])
-			return message.reply(getLang("missingKeyword"));
-		let results = [];
-		try {
-			results = (await itunes({
-				entity: "software",
-				country: "VN",
-				term: args.join(" "),
-				limit: envCommands[commandName].limitResult
-			})).results;
-		}
-		catch (err) {
-			return message.reply(getLang("noResult", args.join(" ")));
-		}
+    if (!keyword) return message.reply(sidebar + "⚠️ Please provide an app name to search.");
 
-		if (results.length > 0) {
-			let msg = "";
-			const pedningImages = [];
-			for (const result of results) {
-				msg += `\n\n- ${result.trackCensoredName} by ${result.artistName}, ${result.formattedPrice} and rated ${"🌟".repeat(result.averageUserRating)} (${result.averageUserRating.toFixed(1)}/5)`
-					+ `\n- ${result.trackViewUrl}`;
-				pedningImages.push(await getStreamFromURL(result.artworkUrl512 || result.artworkUrl100 || result.artworkUrl60));
-			}
-			message.reply({
-				body: msg,
-				attachment: await Promise.all(pedningImages)
-			});
-		}
-		else {
-			message.reply(getLang("noResult", args.join(" ")));
-		}
-	}
+    api.setMessageReaction("🍎", messageID, () => {}, true);
+
+    try {
+      const response = await itunes({
+        entity: "software",
+        country: "US", // رديتها US باش يعطي نتائج عالمية كتر
+        term: keyword,
+        limit: 3
+      });
+
+      const results = response.results;
+
+      if (results.length === 0) {
+        return message.reply(sidebar + `❌ No results found for: ${keyword}`);
+      }
+
+      let msg = `[ 𝗔𝗣𝗣 𝗦𝗧𝗢𝗥𝗘 𝗦𝗘𝗔𝗥𝗖𝗛 ]\n${line}\n`;
+      const pendingImages = [];
+
+      for (const res of results) {
+        const rating = res.averageUserRating ? "🌟".repeat(Math.round(res.averageUserRating)) : "No rating";
+        
+        msg += `${sidebar}❯ **${res.trackCensoredName}**\n` +
+               `${sidebar}👤 Developer: ${res.artistName}\n` +
+               `${sidebar}💰 Price: ${res.formattedPrice}\n` +
+               `${sidebar}⭐ Rating: ${rating} (${res.averageUserRating?.toFixed(1) || 0}/5)\n` +
+               `${sidebar}🔗 [Link](${res.trackViewUrl})\n${line}\n`;
+
+        // جلب أيقونة التطبيق
+        pendingImages.push(await getStreamFromURL(res.artworkUrl512 || res.artworkUrl100));
+      }
+
+      msg += `${sidebar}[ 𝗦𝗬𝗦𝗧𝗘𝗠 𝗢𝗣𝗘𝗥𝗔𝗧𝗜𝗢𝗡𝗔𝗟 ]`;
+
+      return message.reply({
+        body: msg,
+        attachment: await Promise.all(pendingImages)
+      });
+
+    } catch (err) {
+      console.error(err);
+      return message.reply(sidebar + "🚫 Error searching the App Store.");
+    }
+  }
 };
