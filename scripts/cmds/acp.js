@@ -10,7 +10,7 @@ module.exports = {
     role: 2,
     shortDescription: "accept users",
     longDescription: "accept users",
-    category: "𝗨𝗧𝗜𝗟𝗜𝗧𝗬",
+    category: "SYSTEM",
   },
 
   onReply: async function ({ message, Reply, event, api, commandName }) {
