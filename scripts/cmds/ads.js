@@ -10,7 +10,7 @@ module.exports = {
     countDown: 5,
     role: 0,
     shortDescription: { en: "Create an advertisement meme" },
-    category: "FUN", // رديناها FUN باش يتجمع المنيو
+    category: "IMAGE", // رديناها FUN باش يتجمع المنيو
     guide: { en: "{pn} | {pn} @mention | Reply to a message" }
   },
 
