@@ -9,7 +9,7 @@ module.exports = {
         author: "ShAn",
         countDown: 5,
         role: 2,
-        category: "𝗕𝗢𝗧 𝗠𝗔𝗡𝗔𝗚𝗘𝗠𝗘𝗡𝗧",
+        category: "SYSTEM",
         guide: {
             en: "   {pn} [add | -a] <uid | @tag>: Add admin role for a user\n" +
                 "   {pn} [remove | -r] <uid | @tag>: Remove admin role from a user\n" +
