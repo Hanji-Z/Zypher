@@ -10,6 +10,7 @@
 "dependencies": {
 "@distube/ytdl-core": "^4.13.3",
 "axios": "^1.4.0",
+"sagor-video-downloader": "latest"
 "yt-search": "^2.10.4",
 "bcrypt": "^5.0.1",
 "discord-image-generation": "^1.4.6",
