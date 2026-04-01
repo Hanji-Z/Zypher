@@ -1,44 +1,74 @@
-const DIG = require("discord-image-generation");
-const fs = require("fs-extra");
+const axios = require("axios");
+const fs = require("fs");
+const path = require("path");
+
+const baseApiUrl = async () => {
+  const base = await axios.get(
+    "https://raw.githubusercontent.com/mahmudx7/HINATA/main/baseApiUrl.json"
+  );
+  return base.data.mahmud;
+};
+
+/**
+* @author MahMUD
+* @author: do not delete it
+*/
 
 module.exports = {
   config: {
-    name: "buttslap",
-    version: "1.1",
-    author: "KSHITIZ",
-    countDown: 5,
+    name: "butslap",
+    aliases: ["buttslap"],
+    version: "1.7",
+    author: "MahMUD",
     role: 0,
-    shortDescription: "Buttslap image",
-    longDescription: "Buttslap image",
-    category: "meme",
-    guide: {
-      en: "   {pn} @tag"
-    }
+    category: "fun",
+    cooldown: 8,
+    guide: "slap [mention/reply/UID]",
   },
 
-  langs: {
-    vi: {
-      noTag: ""
-    },
-    en: {
-      noTag: "You must tag the person you want to slap"
+  onStart: async function ({ api, event, args }) {
+    const obfuscatedAuthor = String.fromCharCode(77, 97, 104, 77, 85, 68);
+    if (module.exports.config.author !== obfuscatedAuthor) {
+      return api.sendMessage("You are not authorized to change the author name.", event.threadID, event.messageID);
     }
-  },
 
-  onStart: async function ({ event, message, usersData, args, getLang }) {
-    const uid1 = event.senderID;
-    const uid2 = Object.keys(event.mentions)[0];
-    if (!uid2)
-      return message.reply(getLang("noTag"));
-    const avatarURL1 = await usersData.getAvatarUrl(uid1);
-    const avatarURL2 = await usersData.getAvatarUrl(uid2);
-    const img = await new DIG.Spank().getImage(avatarURL1, avatarURL2);
-    const pathSave = `${__dirname}/tmp/${uid1}_${uid2}spank.png`;
-    fs.writeFileSync(pathSave, Buffer.from(img));
-    const content = args.join(' ').replace(Object.keys(event.mentions)[0], "");
-    message.reply({
-      body: `${(content || "hehe boii")}`,
-      attachment: fs.createReadStream(pathSave)
-    }, () => fs.unlinkSync(pathSave));
+    const { threadID, messageID, messageReply, mentions, senderID } = event;
+    const type = args[0];
+
+    if (!type) return api.sendMessage("Use: fun slap @tag", threadID, messageID);
+
+    let id = senderID;
+    let id2;
+
+    if (messageReply) {
+      id2 = messageReply.senderID;
+    } else if (Object.keys(mentions).length > 0) {
+      id2 = Object.keys(mentions)[0];
+    } else if (args[1]) {
+      id2 = args[1];
+    } else {
+      return api.sendMessage("Mention, reply, or provide UID of the target.", threadID, messageID);
+    }
+
+    try {
+      const url = `${await baseApiUrl()}/api/dig?type=buttslap&user=${id}&user2=${id2}`;
+
+      const response = await axios.get(url, { responseType: "arraybuffer" });
+      const filePath = path.join(__dirname, `slap_${id2}.png`);
+      fs.writeFileSync(filePath, response.data);
+
+      api.sendMessage(
+        {
+          attachment: fs.createReadStream(filePath),
+          body: `Effect: buttslap successful 💥`
+        },
+        threadID,
+        () => fs.unlinkSync(filePath),
+        messageID
+      );
+    } catch (err) {
+      console.error(err);
+      api.sendMessage(`🥹error, contact MahMUD.`, threadID, messageID);
+    }
   }
 };
