@@ -1,65 +1,79 @@
 const axios = require("axios");
-const fs = require("fs");
+const fs = require("fs-extra");
 const path = require("path");
 
-
 const channelLinks = [ 
-
   "https://www.youtube.com/@AnimeMVSensei",
-
 ];
 
 module.exports = {
   config: {
     name: "amv",
-    aliases: [], 
-    author: "𝗦𝗵𝗔𝗻",
-    version: "1.0",
-    cooldowns: 5,
+    aliases: ["animevideo"], 
+    author: "Zypher",
+    version: "1.1.0",
+    countDown: 10,
     role: 0,
-    shortDescription: "",
-    longDescription: "Get a random animes amv.",
-    category: "𝗠𝗘𝗗𝗜𝗔",
-    guide: "{p}amv",
+    shortDescription: { en: "Get a random anime AMV" },
+    category: "MEDIA",
+    guide: { en: "{pn}" },
   },
 
-  onStart: async function ({ api, event, args, message }) {
-    api.setMessageReaction("✨", event.messageID, (err) => {}, true);
+  onStart: async function ({ api, event, message }) {
+    const { threadID, messageID } = event;
+    const sidebar = "█║ ";
+    
+    api.setMessageReaction("✨", messageID, () => {}, true);
 
     try {
+      // 1. اختيار قناة عشوائية
+      const randomChannel = channelLinks[Math.floor(Math.random() * channelLinks.length)];
 
-      const randomChannelLink = channelLinks[Math.floor(Math.random() * channelLinks.length)];
+      // 2. طلب الفيديو من الـ API
+      const res = await axios.get(`https://god-kshitiz.vercel.app/channel?link=${encodeURIComponent(randomChannel)}`);
+      
+      if (!res.data || !res.data.urls || res.data.urls.length === 0) {
+        return message.reply(sidebar + "❌ No videos found in this channel.");
+      }
 
+      const videoUrl = res.data.urls[Math.floor(Math.random() * res.data.urls.length)];
 
-      const apiResponse = await axios.get(`https://god-kshitiz.vercel.app/channel?link=${encodeURIComponent(randomChannelLink)}`);
+      // 3. تجهيز المجلد والملف (سمية فريدة)
+      const cachePath = path.join(__dirname, "cache");
+      if (!fs.existsSync(cachePath)) fs.mkdirSync(cachePath);
+      
+      const fileName = `amv_${Date.now()}.mp4`;
+      const tempPath = path.join(cachePath, fileName);
 
+      // 4. تحميل الفيديو كـ Stream
+      const videoStream = await axios.get(videoUrl, { responseType: "stream" });
+      const writer = fs.createWriteStream(tempPath);
 
-      const channelVideoUrl = apiResponse.data.urls[0];
-
-
-      const videoResponse = await axios.get(channelVideoUrl, { responseType: "stream" });
-
-
-      const tempVideoPath = path.join(__dirname, "cache", `amv.mp4`);
-
-      const writer = fs.createWriteStream(tempVideoPath);
-      videoResponse.data.pipe(writer);
+      videoStream.data.pipe(writer);
 
       writer.on("finish", async () => {
-
-        const stream = fs.createReadStream(tempVideoPath);
-
-
-        message.reply({
-          body: "",
-          attachment: stream,
+        // 5. إرسال الفيديو ومسحه
+        await message.reply({
+          body: `[ 𝗭𝗬𝗣𝗛𝗘𝗥 - 𝗔𝗠𝗩 ]\n${sidebar}Enjoy your edit! 🎬`,
+          attachment: fs.createReadStream(tempPath)
         });
 
-        api.setMessageReaction("✅", event.messageID, (err) => {}, true);
+        api.setMessageReaction("✅", messageID, () => {}, true);
+        
+        // مسح الملف باش ما يعمرش السيرفر
+        setTimeout(() => {
+            if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+        }, 5000);
       });
+
+      writer.on("error", (err) => {
+        console.error(err);
+        message.reply(sidebar + "❌ Error while saving video.");
+      });
+
     } catch (error) {
       console.error(error);
-      message.reply("𝕊𝕠𝕣𝕣𝕪, 𝕒𝕟 𝕖𝕣𝕣𝕠𝕣 𝕠𝕔𝕔𝕦𝕣𝕣𝕖𝕕.");
+      message.reply(sidebar + "❌ API is down or video is too large.");
     }
   }
 };
