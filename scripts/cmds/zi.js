@@ -3,7 +3,7 @@ module.exports.config = {
   version: "1.1.0",
   role: 2, 
   author: "Gemini & ShAn",
-  description: "الرد التلقائي الموحد (تفاعلات فقط عند التشغيل/الإيقاف)",
+  description: "الرد التلقائي الموحد (تفاعلا8ت فقط عند التشغيل/الإيقاف)",
   category: "الترفيه",
   guide: {
     en: "{pn} on [الكلمة] أو {pn} off"
