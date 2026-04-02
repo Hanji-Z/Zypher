@@ -5,13 +5,13 @@ module.exports = {
   config: {
     name: "help",
     aliases: ["h", "menu", "اوامر"],
-    version: "5.5.0",
+    version: "5.7.0",
     author: "Zypher",
     countDown: 5,
     role: 0,
     category: "info",
     shortDescription: { en: "The ultimate command center for Zypher" },
-    longDescription: { en: "Fully optimized menu with normalization, plural merging, and unit counting." },
+    longDescription: { en: "Fully optimized menu with text-first delivery for FB Lite." },
     guide: { en: "{pn} | {pn} [page] | {pn} [category] | {pn} [command]" },
     priority: 1,
   },
@@ -34,20 +34,13 @@ module.exports = {
     const line = "█║──────────────────";
     const uiBox = (title, content) => `${sidebar}${title}\n${line}\n${content}\n${line}\n${sidebar}[ 𝗦𝗬𝗦𝗧𝗘𝗠 𝗢𝗣𝗘𝗥𝗔𝗧𝗜𝗢𝗡𝗔𝗟 ]`;
 
-    // 1. تجميع وتوحيد الأصناف (Normalization + Merging Plurals)
     const categories = {};
     commands.forEach((value, key) => {
       if (value.config.role > 0 && role < value.config.role) return;
-
-      // أ) تنقية السمية: حروف كبار وحيد الفراغات
       let cat = (value.config.category || "General").trim().toUpperCase();
-
-      // ب) دمج المفرد والجمع (GAMES -> GAME)
-      // أي كلمة كتسالي بـ S وطول من 4 حروف غايطير ليها الـ S
       if (cat.endsWith('S') && cat.length > 4) {
         cat = cat.slice(0, -1);
       }
-
       if (!categories[cat]) categories[cat] = [];
       categories[cat].push(key);
     });
@@ -60,7 +53,6 @@ module.exports = {
     if (actualCat) {
       const cmds = categories[actualCat].sort();
       let cmdGrid = `${sidebar}❯ 𝗠𝗢𝗗𝗨𝗟𝗘: ${actualCat}\n${sidebar}❯ 𝗨𝗡𝗜𝗧𝗦: ${cmds.length}\n${line}\n`;
-      
       for (let i = 0; i < cmds.length; i += 3) {
         const row = cmds.slice(i, i + 3).map(c => `⧉ ${c.padEnd(8)}`).join(" ");
         cmdGrid += `${sidebar}${row}\n`;
@@ -96,7 +88,6 @@ module.exports = {
     let catGrid = `${sidebar}❯ 𝗠𝗢𝗗𝗨𝗟𝗘𝗦: [ ${page} / ${totalPages} ]\n` +
                   `${sidebar}❯ 𝗧𝗢𝗧𝗔𝗟 𝗨𝗡𝗜𝗧𝗦: ${commands.size}\n${line}\n`;
 
-    // عرض الأصناف فـ Grid (2 فـ السطر) مع عدد الأوامر
     for (let i = 0; i < pagedCats.length; i += 2) {
       const row = pagedCats.slice(i, i + 2).map(cat => {
         const count = categories[cat].length;
@@ -107,16 +98,22 @@ module.exports = {
 
     catGrid += `\n${sidebar}💡 Reply with a category name\n${sidebar}📑 Page: ${prefix}help [number]`;
 
-    const sendData = { body: uiBox("𝗭𝗬𝗣𝗛𝗘𝗥 𝗠𝗔𝗜𝗡𝗙𝗥𝗔𝗠𝗘", catGrid) };
-    if (fs.existsSync(gifPath)) sendData.attachment = fs.createReadStream(gifPath);
+    // --- 🛠️ التعديل النهائي: القائمة (Text) أولاً ثم الغيفت (GIF) ---
 
-    return message.reply(sendData, (err, info) => {
+    // 1. صيفط القائمة النصية هي الأولى
+    return api.sendMessage(uiBox("𝗭𝗬𝗣𝗛𝗘𝗥 𝗠𝗔𝗜𝗡𝗙𝗥𝗔𝗠𝗘", catGrid), event.threadID, async (err, info) => {
+      // ربط الـ Reply مع القائمة النصية
       global.GoatBot.onReply.set(info.messageID, {
         commandName: this.config.name,
         messageID: info.messageID,
         author: event.senderID
       });
-    });
+
+      // 2. صيفط الغيفت من وراها (غايجي تحت النص فـ الشات)
+      if (fs.existsSync(gifPath)) {
+        await api.sendMessage({ attachment: fs.createReadStream(gifPath) }, event.threadID);
+      }
+    }, event.messageID);
   }
 };
 
