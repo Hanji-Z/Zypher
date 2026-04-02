@@ -1,79 +1,55 @@
-const axios = require("axios");
-const fs = require("fs-extra");
-const ytSearch = require("yt-search");
-const path = require("path");
+const axios = require('axios');
+const fs = require('fs-extra');
+const path = require('path');
 
 module.exports = {
   config: {
     name: "song",
-    version: "3.0.0",
-    author: "Zypher & Hanji",
-    countDown: 5,
+    aliases: ["music", "اغنية"],
+    version: "1.0.0",
+    author: "Zypher",
+    countDown: 10,
     role: 0,
-    category: "media",
+    category: "MEDIA",
+    shortDescription: { en: "Download songs as Audio/Vocal" },
     guide: { en: "{pn} [song name]" }
   },
 
-  onStart: async ({ api, args, event }) => {
+  onStart: async function ({ api, event, args }) {
     const { threadID, messageID } = event;
-    const songName = args.join(" ");
-    const cachePath = path.join(__dirname, 'cache');
-    const zypherBox = (title, msg) => `[ 𝗭𝗬𝗣𝗛𝗘𝗥 - ${title} ]\n╼━━━━━━━━━━━━━━━━━━━━╾\n${msg}\n╼━━━━━━━━━━━━━━━━━━━━╾\n[ 𝗔𝗖𝗖𝗘𝗦𝗦 𝗚𝗥𝗔𝗡𝗧𝗘𝗗 - 𝗛𝗔𝗡𝗝𝗜 ]`;
+    const sidebar = "█║ ";
+    const query = args.join(" ");
 
-    if (!songName) return api.setMessageReaction("⚠️", messageID, () => {}, true);
+    if (!query) return api.sendMessage(sidebar + "❗ عطينا سمية الأغنية باغي نغني ليك أنا؟", threadID, messageID);
 
-    api.setMessageReaction("⏳", messageID, () => {}, true);
+    api.setMessageReaction("🎵", messageID, () => {}, true);
+    api.sendMessage(sidebar + `🔍 جاري البحث على: "${query}"...`, threadID, messageID);
 
     try {
-      // 1. البحث عن الأغنية
-      const searchResults = await ytSearch(songName);
-      const video = searchResults.videos[0];
-      if (!video) return api.setMessageReaction("🤷‍♂️", messageID, () => {}, true);
-
-      // 2. استخدام Pro API للتحويل (بإستعمال محرك yt-dlp الخارجي)
-      // غانخدمو بـ API كيعطي رابط مباشر للملف
-      const res = await axios.get(`https://api.vkrdown.com/api/get.php?url=${video.url}`);
+      // استعمال API كيجبد الصوت من يوتيوب/تيكتوك (هاد الـ API كيعطي رابط مباشر للصوت)
+      const res = await axios.get(`https://api.popcat.xyz/lyrics?song=${encodeURIComponent(query)}`);
+      // ملاحظة: هاد الـ API تجريبي، إيلا عندك API خاص بـ mp3 حطو هنا
+      const searchRes = await axios.get(`https://lyric-search-neon.vercel.app/kshitiz?keyword=${encodeURIComponent(query + " audio")}`);
       
-      // ملاحظة: هاد الـ API هو مثال، كاينين بزاف بحال Cobalt ولا Private APIs
-      const downloadUrl = res.data.data.find(f => f.format === "mp3" || f.ext === "mp3")?.url 
-                        || res.data.data[0].url;
+      const videoUrl = searchRes.data[0].videoUrl; // كياخد أول نتيجة
 
-      if (!downloadUrl) throw new Error("Could not fetch download link");
+      // تحويل الفيديو لصوت عبر محرك خارجي (أو إرساله كملف mp4 فيه غير الصوت)
+      const filePath = path.join(__dirname, 'cache', `${Date.now()}.mp3`);
+      
+      // هنا كنخدمو بـ API كيحول الرابط لـ MP3 (مثال)
+      const downloadRes = await axios.get(videoUrl, { responseType: 'arraybuffer' });
+      fs.writeFileSync(filePath, Buffer.from(downloadRes.data, 'binary'));
 
-      if (!fs.existsSync(cachePath)) fs.mkdirSync(cachePath);
-      const filePath = path.join(cachePath, `${Date.now()}.mp3`);
+      return api.sendMessage({
+        body: `[ 𝗭𝗬𝗣𝗛𝗘𝗥 - 𝗔𝗨𝗗𝗜𝗢 ]\n${sidebar}🎧 الأغنية واجدة أ هانجي!\n${sidebar}🎵 الطلب: ${query}`,
+        attachment: fs.createReadStream(filePath)
+      }, threadID, () => {
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      }, messageID);
 
-      // 3. تحميل الملف للسيرفر (Railway) ديريكت
-      const response = await axios({
-        method: 'get',
-        url: downloadUrl,
-        responseType: 'stream'
-      });
-
-      const writer = fs.createWriteStream(filePath);
-      response.data.pipe(writer);
-
-      writer.on('finish', async () => {
-        // 4. الإرسال بـ الهيبة د زيفر
-        await api.sendMessage({
-          body: zypherBox("𝗣𝗟𝗔𝗬𝗜𝗡𝗚", 
-            `  ❯ 🎵 𝗧𝗜𝗧𝗟𝗘 : ${video.title}\n` +
-            `  ❯ ⏱️ 𝗧𝗜𝗠𝗘 : ${video.timestamp}\n` +
-            `  ❯ 🔗 𝗦𝗢𝗨𝗥𝗖𝗘 : YouTube (Pro API)`),
-          attachment: fs.createReadStream(filePath)
-        }, threadID, () => {
-          if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-          api.setMessageReaction("✅", messageID, () => {}, true);
-        }, messageID);
-      });
-
-      writer.on('error', (err) => { throw err; });
-
-    } catch (error) {
-      console.error(error);
-      api.setMessageReaction("❌", messageID, () => {}, true);
-      // إيلا فشل الـ API الأول، كاين ديما Plan B
-      api.sendMessage(zypherBox("𝗦𝗬𝗦𝗧𝗘𝗠-𝗘𝗥𝗥𝗢𝗥", "❯ ❌ السيرفر ديال التحميل عليه الضغط، جرب مرة خرى!"), threadID, messageID);
+    } catch (e) {
+      console.error(e);
+      return api.sendMessage(sidebar + "❌ وقع مشكل فـ السيرفر، جرب تقلب بسمية أوضح.", threadID, messageID);
     }
   }
 };
