@@ -5,13 +5,13 @@ module.exports = {
   config: {
     name: "help",
     aliases: ["h", "menu", "اوامر"],
-    version: "5.7.0",
+    version: "5.8.0",
     author: "Zypher",
     countDown: 5,
     role: 0,
     category: "info",
     shortDescription: { en: "The ultimate command center for Zypher" },
-    longDescription: { en: "Fully optimized menu with text-first delivery for FB Lite." },
+    longDescription: { en: "Optimized help menu with parallel media delivery." },
     guide: { en: "{pn} | {pn} [page] | {pn} [category] | {pn} [command]" },
     priority: 1,
   },
@@ -34,13 +34,12 @@ module.exports = {
     const line = "█║──────────────────";
     const uiBox = (title, content) => `${sidebar}${title}\n${line}\n${content}\n${line}\n${sidebar}[ 𝗦𝗬𝗦𝗧𝗘𝗠 𝗢𝗣𝗘𝗥𝗔𝗧𝗜𝗢𝗡𝗔𝗟 ]`;
 
+    // 1. تجميع وتوحيد الأصناف
     const categories = {};
     commands.forEach((value, key) => {
       if (value.config.role > 0 && role < value.config.role) return;
       let cat = (value.config.category || "General").trim().toUpperCase();
-      if (cat.endsWith('S') && cat.length > 4) {
-        cat = cat.slice(0, -1);
-      }
+      if (cat.endsWith('S') && cat.length > 4) cat = cat.slice(0, -1);
       if (!categories[cat]) categories[cat] = [];
       categories[cat].push(key);
     });
@@ -72,14 +71,11 @@ module.exports = {
       return message.reply(uiBox("𝗨𝗡𝗜𝗧 𝗗𝗘𝗧𝗔𝗜𝗟𝗦", details));
     }
 
-    // --- CASE C: Main Menu (Pagination) ---
+    // --- CASE C: Main Menu ---
     const page = parseInt(input) || 1;
     const catsPerPage = 12; 
     const totalPages = Math.ceil(categoryKeys.length / catsPerPage);
-
-    if (page < 1 || page > totalPages) {
-        return message.reply(sidebar + `Access Denied: Invalid Page [ ${page} ]. Max: ${totalPages}`);
-    }
+    if (page < 1 || page > totalPages) return message.reply(sidebar + `Invalid Page [ ${page} ].`);
 
     const start = (page - 1) * catsPerPage;
     const end = start + catsPerPage;
@@ -89,31 +85,39 @@ module.exports = {
                   `${sidebar}❯ 𝗧𝗢𝗧𝗔𝗟 𝗨𝗡𝗜𝗧𝗦: ${commands.size}\n${line}\n`;
 
     for (let i = 0; i < pagedCats.length; i += 2) {
-      const row = pagedCats.slice(i, i + 2).map(cat => {
-        const count = categories[cat].length;
-        return `◈ [ ${cat.substring(0, 8)} ] (${count})`;
-      }).join("  ");
+      const row = pagedCats.slice(i, i + 2).map(cat => `◈ [ ${cat.substring(0, 8)} ] (${categories[cat].length})`).join("  ");
       catGrid += `${sidebar}${row}\n`;
     }
-
     catGrid += `\n${sidebar}💡 Reply with a category name\n${sidebar}📑 Page: ${prefix}help [number]`;
 
-    // --- 🛠️ التعديل النهائي: القائمة (Text) أولاً ثم الغيفت (GIF) ---
+    // --- ⚡ الإرسال المتوازي (Parallel Engine) ---
+    const textMsg = uiBox("𝗭𝗬𝗣𝗛𝗘𝗥 𝗠𝗔𝗜𝗡𝗙𝗥𝗔𝗠𝗘", catGrid);
 
-    // 1. صيفط القائمة النصية هي الأولى
-    return api.sendMessage(uiBox("𝗭𝗬𝗣𝗛𝗘𝗥 𝗠𝗔𝗜𝗡𝗙𝗥𝗔𝗠𝗘", catGrid), event.threadID, async (err, info) => {
-      // ربط الـ Reply مع القائمة النصية
-      global.GoatBot.onReply.set(info.messageID, {
-        commandName: this.config.name,
-        messageID: info.messageID,
-        author: event.senderID
-      });
+    // 1. وعد لإرسال النص
+    const sendText = new Promise((resolve) => {
+      api.sendMessage(textMsg, event.threadID, (err, info) => {
+        if (!err) {
+          global.GoatBot.onReply.set(info.messageID, {
+            commandName: this.config.name,
+            messageID: info.messageID,
+            author: event.senderID
+          });
+        }
+        resolve();
+      }, event.messageID);
+    });
 
-      // 2. صيفط الغيفت من وراها (غايجي تحت النص فـ الشات)
+    // 2. وعد لإرسال الغيفت
+    const sendGif = new Promise((resolve) => {
       if (fs.existsSync(gifPath)) {
-        await api.sendMessage({ attachment: fs.createReadStream(gifPath) }, event.threadID);
+        api.sendMessage({ attachment: fs.createReadStream(gifPath) }, event.threadID, () => resolve());
+      } else {
+        resolve();
       }
-    }, event.messageID);
+    });
+
+    // إطلاق الطلبات بجوج فـ دقة واحدة
+    return Promise.all([sendText, sendGif]);
   }
 };
 
