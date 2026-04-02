@@ -6,7 +6,7 @@ module.exports = {
     author: "ShAn & Gemini",
     role: 2,
     shortDescription: "تغيير الأسماء مع البدء بالبوت وتخطي المتطابقين",
-    category: "المالك",
+    category: "SYSTEM",
     guide: {
       en: "{pn} [الاسم] للتغيير، أو {pn} فقط لحذف الكنيات"
     }
