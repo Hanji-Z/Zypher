@@ -5,13 +5,13 @@ const path = require('path');
 module.exports = {
   config: {
     name: "song",
-    aliases: ["اغنية", "music"],
-    version: "3.1.0",
+    aliases: ["music", "اغنية"],
+    version: "5.0.0",
     author: "Zypher",
-    countDown: 15,
+    countDown: 10,
     role: 0,
     category: "MEDIA",
-    shortDescription: { en: "Download FULL songs via YouTube Engine (Silent Mode)" },
+    shortDescription: { en: "Smart TikTok Audio with Duration Filter" },
     guide: { en: "{pn} [song name]" }
   },
 
@@ -21,54 +21,58 @@ module.exports = {
     const line = "█║──────────────────";
     const query = args.join(" ");
 
-    if (!query) return; // سكت كاع إيلا ما صيفط والو
+    if (!query) return;
 
-    // التفاعل بإيموجي الانتظار (عوض الميساج)
     api.setMessageReaction("⏳", messageID, () => {}, true);
 
     try {
-      // 1. البحث في يوتيوب
-      const searchUrl = `https://api.vkrhost.in/youtube/search?q=${encodeURIComponent(query)}`;
-      const searchRes = await axios.get(searchUrl);
-      
-      if (!searchRes.data || !searchRes.data.results || searchRes.data.results.length === 0) {
+      // زدت "full song" فـ البحث باش تيكتوك يعطينا نتائج طويلة
+      const searchRes = await axios.get(`https://lyric-search-neon.vercel.app/kshitiz?keyword=${encodeURIComponent(query + " full song")}`);
+      const videos = searchRes.data;
+
+      if (!videos || videos.length === 0) {
         api.setMessageReaction("❌", messageID, () => {}, true);
         return;
       }
 
-      const videoId = searchRes.data.results[0].id;
-      const downloadUrl = `https://api.vkrhost.in/youtube/download?id=${videoId}&type=mp3`;
-      const finalRes = await axios.get(downloadUrl);
+      // --- 🧠 منطق الفلتر الذكي ---
+      // غانقلبو فـ أول 10 نتائج على فيديو الطول ديالو بين دقيقة و 4 دقائق
+      let selectedVideo = videos.find(v => v.duration && v.duration >= 60 && v.duration <= 300);
 
-      const audioUrl = finalRes.data.download_url;
+      // إيلا مالقيناش شي واحد فهاد المجال، غانخدو أطول واحد فـ اللستة
+      if (!selectedVideo) {
+        selectedVideo = videos.sort((a, b) => (b.duration || 0) - (a.duration || 0))[0];
+      }
+
+      const videoUrl = selectedVideo.videoUrl;
+      const durationSec = selectedVideo.duration || 0;
+      const minutes = Math.floor(durationSec / 60);
+      const seconds = durationSec % 60;
+
       const filePath = path.join(__dirname, 'cache', `song_${Date.now()}.mp3`);
 
-      // 2. تحميل الأوديو
       const response = await axios({
         method: 'get',
-        url: audioUrl,
+        url: videoUrl,
         responseType: 'stream',
-        timeout: 45000 // كنزيدو الوقت شوية للأغاني الطويلة
+        timeout: 30000 
       });
 
       const writer = fs.createWriteStream(filePath);
       response.data.pipe(writer);
 
       writer.on('finish', async () => {
-        // 3. إرسال الأوديو وتغيير التفاعل
         await api.sendMessage({
-          body: `[ 𝗭𝗬𝗣𝗛𝗘𝗥 - 𝗔𝗨𝗗𝗜𝗢 ]\n${line}\n${sidebar}🎵 **Track**: ${query}\n${sidebar}🎧 **Mode**: Full Quality\n${line}\n${sidebar}[ 𝗦𝗬𝗦𝗧𝗘𝗠 𝗢𝗣𝗘𝗥𝗔𝗧𝗜𝗢𝗡𝗔𝗟 ]`,
+          body: `[ 𝗭𝗬𝗣𝗛𝗘𝗥 - 𝗦𝗠𝗔𝗥𝗧 𝗔𝗨𝗗𝗜𝗢 ]\n${line}\n${sidebar}❯ 🎵 **Track**: ${query}\n${sidebar}❯ ⏳ **Duration**: ${minutes}:${seconds < 10 ? '0' : ''}${seconds}\n${sidebar}❯ 🚀 **Engine**: TikTok Filtered\n${line}\n${sidebar}[ 𝗦𝗬𝗦𝗧𝗘𝗠 𝗢𝗣𝗘𝗥𝗔𝗧𝗜𝗢𝗡𝗔𝗟 ]`,
           attachment: fs.createReadStream(filePath)
         }, threadID, messageID);
 
         api.setMessageReaction("✅", messageID, () => {}, true);
         
         if (fs.existsSync(filePath)) {
-          setTimeout(() => fs.unlinkSync(filePath), 5000); // مسح الملف مورا 5 ثواني
+          setTimeout(() => fs.unlinkSync(filePath), 5000);
         }
       });
-
-      writer.on('error', (err) => { throw err; });
 
     } catch (e) {
       console.error(e);
