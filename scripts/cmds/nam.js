@@ -2,80 +2,69 @@ module.exports = {
   config: {
     name: "nam",
     aliases: ["1", "renameall"],
-    version: "1.5",
+    version: "1.6",
     author: "ShAn & Gemini",
-    role: 2,
-    shortDescription: "تغيير الأسماء مع البدء بالبوت وتخطي المتطابقين",
+    role: 2, // للمطور فقط
+    shortDescription: "تغيير أسماء لڭروب كامل بـ زر واحد",
     category: "SYSTEM",
     guide: {
-      en: "{pn} [الاسم] للتغيير، أو {pn} فقط لحذف الكنيات"
+      en: "{pn} [الاسم] أو {pn} خاوي باش تمسح الكنيات"
     }
   },
 
-  onStart: async function ({ api, event, args }) {
-    try {
-      const OWNER_ID = "61574764452026";
-      
-      if (event.senderID !== OWNER_ID || !event.isGroup) return;
+  onStart: async function ({ api, event, args, message }) {
+    const { threadID, participantIDs, senderID, messageID } = event;
+    const sidebar = "█║ ";
+    
+    // 🛡️ سيكوريتي: التأكد من أن هانجي هو اللي كيهضر
+    const adminBot = global.GoatBot?.config?.adminBot || [];
+    if (!adminBot.includes(senderID)) {
+        return message.reply(sidebar + "🚫 Error: Only the Bot Developer (Hanji) can execute this massive protocol.");
+    }
 
-      const { threadID, participantIDs } = event;
+    if (!event.isGroup) return message.reply(sidebar + "⚠️ This command must be used in a group!");
+
+    try {
       const newName = args.join(" ").trim();
       const isDeleteMode = !newName;
       const targetName = isDeleteMode ? "" : newName;
 
-      if (!isDeleteMode && newName.length > 500) return;
+      // تفاعل البدء 🖤
+      api.setMessageReaction("🖤", messageID, () => {}, true);
 
       const botID = api.getCurrentUserID();
       
-      // تفاعل البدء 🖤
-      api.setMessageReaction("🖤", event.messageID, () => {}, true);
-
-      // جلب معلومات المجموعة لفحص الكنيات الحالية للأعضاء
-      const threadInfo = await api.getThreadInfo(threadID);
-      const currentNicknames = threadInfo.nicknames || {};
-
-      // ===== المرحلة 1: البوت يبدأ دائماً بكنيته أولاً =====
+      // 1. تغيير كنية البوت أولاً
       try {
         await api.changeNickname(targetName, threadID, botID);
-      } catch (error) {
-        console.error("خطأ في تغيير كنية البوت");
-      }
+      } catch (e) { console.error("Bot Nickname Error"); }
 
-      // ===== المرحلة 2: تصفية الأعضاء وتغيير من يحتاج فقط =====
-      const membersToChange = participantIDs.filter(id => {
-        const isOwnerOrBot = (id === OWNER_ID || id === botID);
-        const hasSameName = (currentNicknames[id] || "") === targetName;
-        // نأخذ فقط العضو الذي ليس المالك/البوت واسمه مختلف عن الاسم المطلوب
-        return !isOwnerOrBot && !hasSameName;
-      });
+      // 2. تصفية الأعضاء (تجنب المطور والبوت)
+      const membersToChange = participantIDs.filter(id => id !== senderID && id !== botID);
 
-      // إذا كان الجميع بنفس الاسم، نضع علامة الصح وننتهي
-      if (membersToChange.length === 0) {
-        return api.setMessageReaction("✅", event.messageID, () => {}, true);
-      }
-
-      const BATCH_SIZE = 3; 
-      const DELAY_BETWEEN_BATCHES = 300; 
+      // 3. التنفيذ على دفعات (Batching) باش مايتبلوكاش البوت
+      const BATCH_SIZE = 5; 
+      const DELAY = 800; // زدت شوية فـ الوقت باش فيسبوك ما يعيقش
 
       for (let i = 0; i < membersToChange.length; i += BATCH_SIZE) {
         const batch = membersToChange.slice(i, i + BATCH_SIZE);
         
-        const batchPromises = batch.map(userId =>
+        await Promise.all(batch.map(userId => 
           api.changeNickname(targetName, threadID, userId).catch(() => {})
-        );
-        
-        await Promise.all(batchPromises);
-        
+        ));
+
         if (i + BATCH_SIZE < membersToChange.length) {
-          await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
+          await new Promise(res => setTimeout(res, DELAY));
         }
       }
 
       // تفاعل الانتهاء ✅
-      api.setMessageReaction("✅", event.messageID, () => {}, true);
+      api.setMessageReaction("✅", messageID, () => {}, true);
+      message.reply(sidebar + (isDeleteMode ? "تم حذف جميع الكنيات بنجاح." : `تم تغيير أسماء الجميع إلى: ${newName}`));
 
     } catch (error) {
-      console.error("❌ خطأ في .nam:", error);
+      console.error("❌ Error in .nam:", error);
+      api.setMessageReaction("❌", messageID, () => {}, true);
     }
   }
 };
