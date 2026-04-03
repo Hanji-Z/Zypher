@@ -7,7 +7,7 @@ module.exports = {
 		author: "Loid Butter",
 		countDown: 5,
 		role: 0,
-		shortDescription: "Flip the coin",
+		shortDescription: "Flip the 9coin",
 		longDescription: "Flip the coin",
 		category: "Other",
 		guide: {
