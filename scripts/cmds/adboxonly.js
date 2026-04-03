@@ -5,7 +5,7 @@ module.exports = {
     version: "1.7.0",
     author: "Zypher",
     countDown: 5,
-    role: 0, // رديتها 0 باش الكود يقدر يتنفذ ويشوف الـ ID ديالك أولاً
+    role: 0, // رديتها 0 باش الكود يقدر يتنفذ ويشوف الـ 8ID ديالك أولاً
     category: "GROUP",
     guide: {
       en: "{pn} [on | off] | {pn} noti [on | off]"
