@@ -1,16 +1,15 @@
 const fs = require("fs-extra");
 const path = require("path");
 
-
 module.exports = {
   config: {
     name: "1sp",
     version: "1.0.0",
     author: "Zypher (Hanji)",
-    role: 2, // من الأحسن تخليه للآدمن باش مايرونوش ليك البوت
+    role: 2, // للآدمن فقط
     category: "SYSTEM",
     shortDescription: { en: "Auto-send words from a txt file via emoji trigger" },
-    guide: { en: "Send 🥢 to start, 🛑 to stop." }
+    guide: { en: "Send 🥢 to start, 🐤 to stop." }
   },
 
   onLoad: function () {
@@ -23,6 +22,12 @@ module.exports = {
     if (!global.ZypherSpam) {
       global.ZypherSpam = {};
     }
+  },
+
+  // 🛠️ التعديل المهم: زدنا onStart باش Railway يقبل الملف
+  onStart: async function ({ api, event }) {
+    const sidebar = "█║ ";
+    return api.sendMessage(`${sidebar}هاد الأمر خدام غير بـ الإيموجيات أ المعلم!\n${sidebar}❯ لوح 🥢 باش تبدا الرشاش.\n${sidebar}❯ لوح 🐤 باش تحبسو.`, event.threadID, event.messageID);
   },
 
   // غنخدمو بـ onChat باش البوت يقرا كاع الميساجات ويقلب على الإيموجي
@@ -44,12 +49,12 @@ module.exports = {
         const content = fs.readFileSync(txtPath, "utf-8");
         const lines = content.split('\n').filter(line => line.trim() !== "");
 
-        if (lines.length === 0) return api.sendMessage("The file is empty ", threadID);
+        if (lines.length === 0) return api.sendMessage("The file is empty", threadID);
 
         api.setMessageReaction("🔥", messageID, () => {}, true);
         
         let index = 0;
-        // تشغيل الرشاش (كل 1.5 ثانية) - هاد الرقم 1500 هو المدة بالملي ثانية
+        // تشغيل الرشاش - خليتيها 500ms (الهربة!)
         global.ZypherSpam[threadID] = setInterval(() => {
           api.sendMessage(lines[index], threadID);
           index++;
@@ -63,8 +68,8 @@ module.exports = {
       }
     }
 
-    // 🛑 --- [ إيموجي النهاية ] ---
-    if (body === "🐤") { // تقدر تبدلو بـ 🐤 إيلا بغيتي
+    // 🐤 --- [ إيموجي النهاية ] ---
+    if (body === "🐤") { 
       if (global.ZypherSpam[threadID]) {
         clearInterval(global.ZypherSpam[threadID]); // حبس الرشاش
         delete global.ZypherSpam[threadID]; // مسح لڭروب من الذاكرة
