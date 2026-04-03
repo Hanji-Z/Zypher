@@ -2,20 +2,29 @@ module.exports = {
   config: {
     name: "onlyadminbox",
     aliases: ["admchatonly", "adboxonly", "adminboxonly"],
-    version: "1.6.0",
+    version: "1.7.0",
     author: "Zypher",
     countDown: 5,
-    role: 2,
+    role: 0, // رديتها 0 باش الكود يقدر يتنفذ ويشوف الـ ID ديالك أولاً
     category: "GROUP",
     guide: {
       en: "{pn} [on | off] | {pn} noti [on | off]"
     }
   },
 
-  onStart: async function ({ args, message, event, threadsData }) {
-    const { threadID } = event;
+  onStart: async function ({ api, args, message, event, threadsData, role }) {
+    const { threadID, senderID } = event;
     const sidebar = "█║ ";
     const line = "█║──────────────────";
+
+    // 🛡️ --- [ 𝗛𝗔𝗡𝗝𝗜 𝗜𝗠𝗠𝗨𝗡𝗜𝗧𝗬 𝗖𝗛𝗘𝗖𝗞 ] ---
+    // كنقلبو واش نتا هو المطور (الـ ID ديالك فـ config.json)
+    const isOwner = global.config.adminBot.includes(senderID);
+    
+    // إيلا ماكنتيش مطور وماكنتيش أدمن فـ لڭروب، ممنوع تخدم هاد الأمر
+    if (!isOwner && role < 2) {
+      return message.reply(sidebar + "🚫 Error: This command is for Group Admins or the Bot Owner only!");
+    }
 
     let isSetNoti = false;
     let value;
@@ -34,12 +43,14 @@ module.exports = {
 
     await threadsData.set(threadID, isSetNoti ? !value : value, keySetData);
 
-    // ميساجات قصيرة بلونغلي
     const status = isSetNoti 
       ? (value ? "ALERTS: ON" : "ALERTS: OFF") 
       : (value ? "ADMINS ONLY: ON" : "ADMINS ONLY: OFF");
 
-    const response = `[ 𝗭𝗬𝗣𝗛𝗘𝗥 - 𝗖𝗢𝗡𝗙𝗜𝗚 ]\n${line}\n${sidebar}❯ 𝗦𝗧𝗔𝗧𝗨𝗦: ${status}\n${line}\n${sidebar}[ 𝗢𝗣𝗘𝗥𝗔𝗧𝗜𝗢𝗡𝗔𝗟 ]`;
+    // إيلا المطور هو اللي طفاه، كنزيدو ميساج تأكيد
+    const ownerNote = isOwner ? `\n${sidebar}❯ 𝗔𝗖𝗖𝗘𝗦𝗦: Owner Bypass Active` : "";
+
+    const response = `[ 𝗭𝗬𝗣𝗛𝗘𝗥 - 𝗖𝗢𝗡𝗙𝗜𝗚 ]\n${line}\n${sidebar}❯ 𝗦𝗧𝗔𝗧𝗨𝗦: ${status}${ownerNote}\n${line}\n${sidebar}[ 𝗢𝗣𝗘𝗥𝗔𝗧𝗜𝗢𝗡𝗔𝗟 ]`;
 
     return message.reply(response);
   }
