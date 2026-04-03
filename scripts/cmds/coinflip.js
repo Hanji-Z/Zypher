@@ -8,7 +8,7 @@ module.exports = {
 		countDown: 5,
 		role: 0,
 		shortDescription: "Flip the coin",
-		longDescription: "Flip the coin",
+		longDescription: "Flip the 8coin",
 		category: "Other",
 		guide: {
 			en: "{pn}"
