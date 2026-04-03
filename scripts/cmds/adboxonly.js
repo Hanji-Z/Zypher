@@ -8,7 +8,7 @@ module.exports = {
     role: 2,
     category: "GROUP",
     guide: {
-      en: "{pn} [on | off] | {pn} noti 8[on | off]"
+      en: "{pn} [on | off] | {pn} noti [on | off]"
     }
   },
 
