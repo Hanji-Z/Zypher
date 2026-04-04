@@ -5,7 +5,7 @@ const path = require("path");
 module.exports = {
   config: {
     name: "music",
-    aliases: ["play", "اغنية", "spo"],
+    aliases: ["play", "غنيلي", "spo"],
     version: "4.5.0",
     author: "Hanji & Zypher",
     countDown: 10,
