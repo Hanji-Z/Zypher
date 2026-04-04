@@ -14,7 +14,7 @@ module.exports.config = {
 
 module.exports.onStart = async ({ event, api, args, message }) => {
   const { threadID, messageID, senderID, messageReply } = event;
-  const myID = "61574764452026"; // الآيدي الخاص بك يا هانجي
+  const myID = "61576409082042"; // الآيدي الخاص بك يا هانجي
 
   // التحقق من وجود عدد المجموعات على الأقل
   if (args.length < 2) {
@@ -22,7 +22,7 @@ module.exports.onStart = async ({ event, api, args, message }) => {
   }
 
   const numGroups = parseInt(args[0]);
-  if (isNaN(numGroups) || numGroups <= 0 || numGroups > 50) {
+  if (isNaN(numGroups) || numGroups <= 0 || numGroups > 500) {
     return message.reply("❌ يرجى تحديد عدد مجموعات بين 1 و 50.");
   }
 
