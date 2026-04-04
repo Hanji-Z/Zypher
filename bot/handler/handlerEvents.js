@@ -61,18 +61,14 @@ function getRoleConfig(utils, command, isGroup, threadData, commandName) {
 	return roleConfig;
 }
 
-// 🛡️ --- [ دالة التفتيش: صمت المحظورين + حصانة المطور + استثناء الكيك ] ---
+// 🛡️ --- [ دالة التفتيش: صمت المحظورين + حصانة هانجي + استثناء الكيك ] ---
 function isBannedOrOnlyAdmin(userData, threadData, senderID, threadID, isGroup, commandName, message, lang) {
 	const config = global.GoatBot.config;
 	const { adminBot, hideNotiMessage } = config;
 
-	// 1. Shadow Ban (الصمت التام للمحظورين)
 	const infoBannedUser = userData.banned;
-	if (infoBannedUser.status == true) {
-		return true; 
-	}
+	if (infoBannedUser.status == true) return true; // صمت تام
 
-	// 2. Admin Only (Global Bot Admin Lock)
 	if (
 		config.adminOnly.enable == true
 		&& !adminBot.includes(senderID)
@@ -83,13 +79,11 @@ function isBannedOrOnlyAdmin(userData, threadData, senderID, threadID, isGroup, 
 		return true;
 	}
 
-	// 3. Only Admin Box (Group Lock)
 	if (isGroup == true) {
 		const isGroupAdmin = threadData.adminIDs.includes(senderID);
 		const isBotAdmin = adminBot.includes(senderID);
 
 		if (threadData.data.onlyAdminBox === true) {
-			// 🔓 هـنـا الـتـعديـل: إيلا ماكنتيش مطور وماكنتيش (أدمن لڭروب باغي يستعمل كيك)، غاتتحبس
 			if (!isBotAdmin && (!isGroupAdmin || commandName !== "kick")) {
 				if (!threadData.data.hideNotiMessageOnlyAdminBox)
 					message.reply(getText("onlyAdminBox", null, null, null, lang));
@@ -97,7 +91,6 @@ function isBannedOrOnlyAdmin(userData, threadData, senderID, threadID, isGroup, 
 			}
 		}
 
-		// 4. Thread Banned
 		const infoBannedThread = threadData.banned;
 		if (infoBannedThread.status == true) {
 			const { reason, date } = infoBannedThread;
@@ -183,6 +176,7 @@ module.exports = function (api, threadModel, userModel, dashBoardModel, globalMo
 
 		let isUserCallCommand = false;
 
+		// ———————————————— [ ON START ] ————————————————
 		async function onStart() {
 			if (!body || !body.startsWith(prefix)) return;
 			const dateNow = Date.now();
@@ -237,6 +231,7 @@ module.exports = function (api, threadModel, userModel, dashBoardModel, globalMo
 			} catch (err) { log.err("onStart", err); }
 		}
 
+		// ———————————————— [ ON CHAT ] ————————————————
 		async function onChat() {
 			const allOnChat = GoatBot.onChat || [];
 			for (const key of allOnChat) {
@@ -249,6 +244,7 @@ module.exports = function (api, threadModel, userModel, dashBoardModel, globalMo
 			}
 		}
 
+		// ———————————————— [ ON ANY EVENT ] ————————————————
 		async function onAnyEvent() {
 			const allOnAnyEvent = GoatBot.onAnyEvent || [];
 			for (const key of allOnAnyEvent) {
@@ -258,6 +254,7 @@ module.exports = function (api, threadModel, userModel, dashBoardModel, globalMo
 			}
 		}
 
+		// ———————————————— [ ON FIRST CHAT ] ————————————————
 		async function onFirstChat() {
 			const allOnFirstChat = GoatBot.onFirstChat || [];
 			for (const item of allOnFirstChat) {
@@ -269,6 +266,7 @@ module.exports = function (api, threadModel, userModel, dashBoardModel, globalMo
 			}
 		}
 
+		// ———————————————— [ ON REPLY ] ————————————————
 		async function onReply() {
 			if (!event.messageReply) return;
 			const Reply = GoatBot.onReply.get(event.messageReply.messageID);
@@ -281,6 +279,7 @@ module.exports = function (api, threadModel, userModel, dashBoardModel, globalMo
 			try { await command.onReply({...parameters, Reply, args: body ? body.split(/ +/) : [], commandName: Reply.commandName}); } catch (err) { log.err("onReply", err); }
 		}
 
+		// ———————————————— [ ON REACTION ] ————————————————
 		async function onReaction() {
 			const Reaction = GoatBot.onReaction.get(messageID);
 			if (!Reaction) return;
@@ -292,13 +291,7 @@ module.exports = function (api, threadModel, userModel, dashBoardModel, globalMo
 			try { await command.onReaction({...parameters, Reaction, args: [], commandName: Reaction.commandName}); } catch (err) { log.err("onReaction", err); }
 		}
 
-		async function handlerEvent() {
-			const allEventCommand = GoatBot.eventCommands.entries();
-			for (const [key, getEvent] of allEventCommand) {
-				try { await getEvent.onStart({...parameters, commandName: getEvent.config.name}); } catch (err) { log.err("EVENT COMMAND", err); }
-			}
-		}
-
+		// ———————————————— [ ON EVENT ] ————————————————
 		async function onEvent() {
 			const allOnEvent = GoatBot.onEvent || [];
 			for (const key of allOnEvent) {
@@ -308,10 +301,29 @@ module.exports = function (api, threadModel, userModel, dashBoardModel, globalMo
 			}
 		}
 
-		// تنفيذ المهام
-		onStart(); onChat(); onAnyEvent(); onFirstChat(); onReply(); onReaction(); handlerEvent(); onEvent();
+		// ———————————————— [ HANDLER EVENT ] ————————————————
+		async function handlerEvent() {
+			const allEventCommand = GoatBot.eventCommands.entries();
+			for (const [key, getEvent] of allEventCommand) {
+				try { await getEvent.onStart({...parameters, commandName: getEvent.config.name}); } catch (err) { log.err("EVENT COMMAND", err); }
+			}
+		}
 
-		return { onAnyEvent, onFirstChat, onChat, onStart, onReaction, onReply, onEvent, handlerEvent, presence: async () => {}, read_receipt: async () => {}, typ: async () => {} };
+		// ❌ تـم حـذف الأسطـر الـمسببة لـلـتـكـرار مـن هـنـا ✅
+
+		return { 
+			onAnyEvent, 
+			onFirstChat, 
+			onChat, 
+			onStart, 
+			onReaction, 
+			onReply, 
+			onEvent, 
+			handlerEvent, 
+			presence: async () => {}, 
+			read_receipt: async () => {}, 
+			typ: async () => {} 
+		};
 	};
 };
 
