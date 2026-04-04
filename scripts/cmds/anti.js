@@ -4,12 +4,12 @@ module.exports = {
 	config: {
 		name: "anti", 
 		aliases: ["ac", "antichange"],
-		version: "2.1",
+		version: "3.5",
 		author: "𝗦𝗵𝗔𝗻 & Gemini",
 		countDown: 5,
-		role: 2,
+		role: 2, // للمطور فقط يتحكم فـ التشغيل/الإيقاف
 		description: {
-			en: "Anti change info box - Original Logic with 🥴 reaction"
+			en: "Anti-change for Group Info (Optimized with Anti-Spam Lock)"
 		},
 		category: "GROUP",
 		guide: {
@@ -34,8 +34,7 @@ module.exports = {
 				dataAntiChangeInfoBox[key] = data;
 
 			await threadsData.set(threadID, dataAntiChangeInfoBox, "data.antiChangeInfoBox");
-			// التفاعل بالإيموجي عند التفعيل أو الإيقاف
-			api.setMessageReaction("🥴", messageID, () => {}, true);
+			api.setMessageReaction("🛡️", messageID, () => {}, true);
 		}
 
 		switch (option) {
@@ -53,7 +52,6 @@ module.exports = {
 				break;
 			}
 			case "nickname": {
-				// --- العودة للمنطق الأصلي تماماً لسحب الكنيات ---
 				const { members } = await threadsData.get(threadID);
 				const originalNicknames = members.map(user => ({ [user.userID]: user.nickname })).reduce((a, b) => ({ ...a, ...b }), {});
 				await checkAndSaveData("nickname", originalNicknames);
@@ -63,19 +61,23 @@ module.exports = {
 		}
 	},
 
-	onEvent: async function ({ event, threadsData, role, api }) {
+	onEvent: async function ({ event, threadsData, api }) {
 		const { threadID, logMessageType, logMessageData, author } = event;
 		const botID = api.getCurrentUserID();
 
-		// لا نتدخل إذا كان المغير هو البوت
+		// 1. لا نتدخل إذا كان المغير هو البوت (منع التكرار اللانهائي)
 		if (author === botID) return;
 
 		const dataAntiChange = await threadsData.get(threadID, "data.antiChangeInfoBox", {});
+		const adminBot = global.GoatBot.config.adminBot || [];
+		
+		// 🛡️ فحص الصلاحية: هل المغير مطور للبوت؟
+		const isBotAdmin = adminBot.includes(author);
 
 		switch (logMessageType) {
 			case "log:thread-image": {
 				if (!dataAntiChange.avatar) return;
-				if (role < 1) {
+				if (!isBotAdmin) {
 					api.changeGroupImage(await getStreamFromURL(dataAntiChange.avatar), threadID);
 				} else {
 					const imageSrc = logMessageData.url;
@@ -86,26 +88,46 @@ module.exports = {
 				}
 				break;
 			}
+
 			case "log:thread-name": {
 				if (!dataAntiChange.hasOwnProperty("name")) return;
-				if (role < 1) {
-					api.setTitle(dataAntiChange.name, threadID);
+
+				// --- [ 🔒 نظام منع الهيستيريا / 𝗔𝗻𝘁𝗶-𝗦𝗽𝗮𝗺 𝗟𝗼𝗰𝗸 ] ---
+				if (!global.antiNameLock) global.antiNameLock = {};
+				const now = Date.now();
+				const lastAction = global.antiNameLock[threadID] || 0;
+
+				// إذا تم تغيير الاسم في أقل من 5 ثوانٍ، نتجاهل الحدث
+				if (now - lastAction < 1500) return;
+
+				const newName = logMessageData.name;
+				const oldName = dataAntiChange.name;
+
+				// إذا كان الاسم الجديد هو نفسه القديم (تم إرجاعه بالفعل)، نسكت
+				if (newName === oldName) return;
+
+				if (!isBotAdmin) {
+					global.antiNameLock[threadID] = now; // تفعيل القفل الزمني
+					api.setTitle(oldName, threadID, (err) => {
+						if (!err) api.setMessageReaction("🛡️", event.messageID, () => {}, true);
+					});
 				} else {
-					await threadsData.set(threadID, logMessageData.name, "data.antiChangeInfoBox.name");
+					// تحديث قاعدة البيانات إذا كان المغير هو المطور
+					await threadsData.set(threadID, newName, "data.antiChangeInfoBox.name");
 				}
 				break;
 			}
+
 			case "log:user-nickname": {
-				// --- العودة للمنطق الأصلي تماماً لإرجاع الكنية ---
 				if (!dataAntiChange.hasOwnProperty("nickname")) return;
 				const { nickname, participant_id } = logMessageData;
+				const oldNick = dataAntiChange.nickname[participant_id] || "";
 
-				if (role < 1) {
-					// إرجاع الكنية من القاموس الأصلي المحفوظ
-					const oldNick = dataAntiChange.nickname[participant_id] || "";
+				if (nickname === oldNick) return;
+
+				if (!isBotAdmin) {
 					api.changeNickname(oldNick, threadID, participant_id);
 				} else {
-					// تحديث الكنية الجديدة في قاعدة البيانات إذا غيرها الأدمن
 					await threadsData.set(threadID, nickname, `data.antiChangeInfoBox.nickname.${participant_id}`);
 				}
 				break;
