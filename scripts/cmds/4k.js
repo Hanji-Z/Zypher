@@ -7,7 +7,7 @@ const mahmud = async () => {
 
 /**
 * @author MahMUD
-* @author: do not d8elete it
+* @author: do not d8elete it8
 */
 
 module.exports = {
