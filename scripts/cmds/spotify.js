@@ -4,82 +4,91 @@ const path = require("path");
 
 module.exports = {
   config: {
-    name: "spotify",
-    aliases: ["spo", "أغنيةة", "song"],
-    version: "2.1.0",
+    name: "music",
+    aliases: ["play", "اغنية", "spo"],
+    version: "4.5.0",
     author: "Hanji & Zypher",
     countDown: 10,
     role: 0,
     category: "MUSIC",
-    shortDescription: { en: "Search and download Spotify music" }
+    shortDescription: { en: "Search and download music from YouTube" }
   },
 
   onStart: async function ({ api, event, args, message }) {
     const { threadID, messageID } = event;
-    let query = args.join(" ");
+    const query = args.join(" ");
     const sidebar = "█║ ";
     const cachePath = path.join(__dirname, "cache", `${Date.now()}.mp3`);
 
-    if (!query) return message.reply(sidebar + "⚠️ | كتب سمية الأغنية ولا حط الرابط أ هانجي!");
+    if (!query) return message.reply(sidebar + "⚠️ | كتب سمية الأغنية أ !");
 
-    // 🔑 سـوارت RapidAPI ديالك
     const headers = {
       'x-rapidapi-key': 'd7beed5439msh7acb6c7f34a45c7p1126c3jsn210162f8627c',
-      'x-rapidapi-host': 'spotify-downloader9.p.rapidapi.com'
+      'x-rapidapi-host': 'yt-search-and-download-mp3.p.rapidapi.com'
     };
 
     try {
       api.setMessageReaction("🔍", messageID, () => {}, true);
 
-      // 🕵️ المرحلة 1: البحث (إيلا مكانش رابط)
-      if (!query.startsWith("https://")) {
-        const searchRes = await axios.get(`https://api.maher-zubair.tech/search/spotify?q=${encodeURIComponent(query)}`);
-        
-        if (!searchRes.data || !searchRes.data.result || searchRes.data.result.length === 0) {
-          api.setMessageReaction("❌", messageID, () => {}, true);
-          return message.reply(sidebar + "❌ | مالقيت حتى أغنية بهاد السمية!");
-        }
-        // هز أول رابط طلع فـ البحث
-        query = searchRes.data.result[0].url;
-      }
-
-      // 📥 المرحلة 2: جلب رابط التحميل بـ RapidAPI
-      api.setMessageReaction("🔄", messageID, () => {}, true);
-      const res = await axios.get(`https://spotify-downloader9.p.rapidapi.com/downloadSong`, {
-        params: { songId: query },
+      // 🕵️ المرحلة 1: الـبـحـث (نستخدم q كـيـمـا قلتي أ معلم)
+      const searchRes = await axios.get(`https://yt-search-and-download-mp3.p.rapidapi.com/search`, {
+        params: { q: query },
         headers: headers
       });
 
-      if (!res.data || res.data.success !== true) {
-         api.setMessageReaction("⚠️", messageID, () => {}, true);
-         return message.reply(sidebar + "❌ | السيرفر رفض الطلب. تأكد من Quota ديال RapidAPI.");
+      // ✅ تـصـحـيـح الـمـسـار: السكرين كاتبين "videos"
+      if (!searchRes.data || !searchRes.data.videos || searchRes.data.videos.length === 0) {
+        api.setMessageReaction("❌", messageID, () => {}, true);
+        return message.reply(sidebar + "❌ | مالقيت حتى نتيجة بهاد السمية!");
       }
 
-      const { downloadLink, title, artist } = res.data.data;
+      const video = searchRes.data.videos[0];
+      const videoUrl = video.url;
+      const title = video.name;
 
-      // 💾 المرحلة 3: التحميل الفعلي (Binary Mode)
+      // 🔄 المرحلة 2: جـلـب رابـط الـ MP3
       api.setMessageReaction("📥", messageID, () => {}, true);
-      const audioRes = await axios.get(downloadLink, { responseType: "arraybuffer" });
-      fs.writeFileSync(cachePath, Buffer.from(audioRes.data));
+      const downloadRes = await axios.get(`https://yt-search-and-download-mp3.p.rapidapi.com/mp3`, {
+        params: { url: videoUrl },
+        headers: headers
+      });
 
-      // 🚀 المرحلة 4: الإرسال
-      const msg = {
-        body: `[ 𝗭𝗬𝗣𝗛𝗘𝗥 - 𝗦𝗣𝗢𝗧𝗜𝗙𝗬 ]\n█║──────────────────\n${sidebar}❯ 𝗧𝗜𝗧𝗟𝗘: ${title}\n${sidebar}❯ 𝗔𝗥𝗧𝗜𝗦𝗧: ${artist}\n${sidebar}❯ 𝗦𝗧𝗔𝗧𝗨𝗦: Success ✅\n█║──────────────────`,
-        attachment: fs.createReadStream(cachePath)
-      };
+      if (!downloadRes.data || !downloadRes.data.link) {
+         api.setMessageReaction("⚠️", messageID, () => {}, true);
+         return message.reply(sidebar + "🚫 | السيرفر مابغاش يعطيني رابط التحميل.");
+      }
 
-      await api.sendMessage(msg, threadID, (err) => {
-        if (err) console.error(err);
-        if (fs.existsSync(cachePath)) fs.unlinkSync(cachePath);
-      }, messageID);
+      const downloadLink = downloadRes.data.link;
 
-      api.setMessageReaction("🎵", messageID, () => {}, true);
+      // 💾 المرحلة 3: الـتـحـمـيـل (Stream)
+      const response = await axios({
+        method: 'GET',
+        url: downloadLink,
+        responseType: 'stream'
+      });
+
+      const writer = fs.createWriteStream(cachePath);
+      response.data.pipe(writer);
+
+      writer.on('finish', async () => {
+        const msg = {
+          body: `[ 𝗭𝗬𝗣𝗛𝗘𝗥 - 𝗠𝗨𝗦𝗜𝗖 ]\n█║──────────────────\n${sidebar}❯ 𝗧𝗜𝗧𝗟𝗘: ${title}\n${sidebar}❯ 𝗗𝗨𝗥𝗔𝗧𝗜𝗢𝗡: ${video.duration}\n${sidebar}❯ 𝗦𝗧𝗔𝗧𝗨𝗦: Done ✅\n█║──────────────────`,
+          attachment: fs.createReadStream(cachePath)
+        };
+
+        await api.sendMessage(msg, threadID, (err) => {
+          if (err) console.error(err);
+          if (fs.existsSync(cachePath)) fs.unlinkSync(cachePath);
+        }, messageID);
+
+        api.setMessageReaction("🎵", messageID, () => {}, true);
+      });
 
     } catch (e) {
       console.error(e);
       if (fs.existsSync(cachePath)) fs.unlinkSync(cachePath);
       api.setMessageReaction("❌", messageID, () => {}, true);
-      return message.reply(sidebar + "🚫 | وقع مشكل تقني. جرب رابط ديريكت إيلا مانفعش البحث.");
+      return message.reply(sidebar + "🚫 | وقع مشكل فـ الـ API، تأكد من الـ Quota!");
     }
   }
 };
