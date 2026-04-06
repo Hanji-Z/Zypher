@@ -1,54 +1,59 @@
-Enterconst fs = require("fs-extra");
+const fs = require("fs-extra");
 const path = require("path");
 
-// 🚩 حالة الأمر العالمية
+// 🚩 حالة الأمر وتوقيت آخر رد
 if (global.isGlitchActive === undefined) global.isGlitchActive = false;
+if (global.lastGlitchSent === undefined) global.lastGlitchSent = {}; // تخزين آخر وقت صيفط فيه فكل كروية
 
 module.exports = {
   config: {
     name: "glitch",
-    version: "1.1.0",
+    version: "3.0.0",
     author: "Hanji",
     countDown: 0,
     role: 2, 
     category: "FUN",
-    shortDescription: { en: "Ultra-silent glitch mode" }
+    shortDescription: { en: "Smart anti-spam glitch mode" }
   },
 
   onChat: async function ({ api, event }) {
     const { body, senderID, threadID, messageID } = event;
     const cachePath = path.join(__dirname, "cache", "glitch.txt");
     
-    // 🔑 الـسـوارت (تـقـدر تـبـدلهـم لـي بـغـيـتـي)
-    const startEmoji = "👿"; // ساروت البداية (Silent)
-    const stopEmoji = "🐤";  // ساروت الإيقاف (With Reaction)
-    const adminID = "61576409082042"; // الأيدي ديالك أ هانجي
+    // 🔑 جلب لستة الأونرز
+    const admins = global.config.ADMINBOT || [];
+    const isAdmin = admins.includes(senderID);
 
-    if (senderID === adminID) {
-      // 1️⃣ بـداية الـعـمـلـيـة (Silent Mode)
-      if (body === startEmoji) {
+    // ⚙️ سـوارت الـتـحـكـم
+    if (isAdmin) {
+      if (body === "😯") {
         global.isGlitchActive = true;
-        // بلاش من التفاعل وبلاش من الميساج كما طلب العشير
         return; 
       }
-
-      // 2️⃣ إيـقـاف الـعـمـلـيـة (With Reaction)
-      if (body === stopEmoji) {
+      if (body === "🐤") {
         global.isGlitchActive = false;
-        // هنا غايحط غير التفاعل باش تعرفو طفا
         return api.setMessageReaction("✅", messageID, () => {}, true);
       }
     }
 
-    // 3️⃣ الـرد الآلـي بـالـخـمـاج (إيلا كان شاعل)
-    if (global.isGlitchActive && senderID !== adminID && body) {
-      let glitchText = "Z̷y̶p̵h̸e̶r̸ ̷S̶y̸s̵t̶e̵m̵ ̷E̷r̵r̸o̷r̸";
-      
-      if (fs.existsSync(cachePath)) {
-        glitchText = fs.readFileSync(cachePath, "utf-8");
-      }
+    // 🛡️ مـنـطـق الـرد الـذكي (5 seconds cooldown)
+    if (global.isGlitchActive && !isAdmin && body) {
+      const now = Date.now();
+      const cooldown = 7000; // 5000ms = 5 ثواني
 
-      return api.sendMessage(glitchText, threadID, messageID);
+      // تشيك واش دازت 5 ثواني على آخر مرة صيفط فيها البوت فـ هاد لڭروب بالظبط
+      if (!global.lastGlitchSent[threadID] || (now - global.lastGlitchSent[threadID] >= cooldown)) {
+        
+        let glitchText = "Z̷y̶p̵h̸e̶r̸ ̷S̶y̸s̵t̶e̵m̵ ̷E̷r̵r̸o̷r̸";
+        if (fs.existsSync(cachePath)) {
+          glitchText = fs.readFileSync(cachePath, "utf-8");
+        }
+
+        // تحديث الوقت قبل الإرسال باش ما يوقعش دوبلاج
+        global.lastGlitchSent[threadID] = now;
+
+        return api.sendMessage(glitchText, threadID);
+      }
     }
   }
 };
