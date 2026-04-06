@@ -4,6 +4,7 @@ module.exports = {
     eventType: ["log:unsubscribe"], 
     version: "1.2.0",
     author: "Hanji",
+    category: "SYSTEM",
     envConfig: {
       enable: true
     }
