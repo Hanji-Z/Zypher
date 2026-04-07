@@ -1,13 +1,10 @@
 const fs = require("fs-extra");
 const path = require("path");
 
-if (global.isGlitchActive === undefined) global.isGlitchActive = false;
-if (global.lastGlitchSent === undefined) global.lastGlitchSent = {};
-
 module.exports = {
   config: {
     name: "glitch",
-    version: "3.0.2",
+    version: "3.0.5",
     author: "Hanji",
     countDown: 0,
     role: 2, 
@@ -15,44 +12,49 @@ module.exports = {
     shortDescription: { en: "Smart anti-spam glitch mode" }
   },
 
-  onStart: async function ({ api, event }) {
-    // هادي غير باش إيلا كتبتي .glitch يعرفك البوت بلي راك خدام
-    return api.sendMessage("🤖 نـظام Glitch شغال فـ الخلفية. استعمل الإيموجيات للتحكم.", event.threadID);
+  onLoad: function () {
+    // تجهيز الملف والذاكرة بنفس ستايل 1sp
+    const cachePath = path.join(__dirname, "cache", "glitch.txt");
+    if (!fs.existsSync(path.join(__dirname, "cache"))) fs.ensureDirSync(path.join(__dirname, "cache"));
+    if (!fs.existsSync(cachePath)) {
+      fs.writeFileSync(cachePath, "Z̷y̶p̵h̸e̶r̸ ̷S̶y̸s̵t̶e̵m̵ ̷E̷r̵r̸o̷r̸", "utf-8");
+    }
+    if (!global.isGlitchActive) global.isGlitchActive = {};
+    if (!global.lastGlitchSent) global.lastGlitchSent = {};
   },
 
-  onChat: async function ({ api, event, config }) { // <--- زدنا config هنا
+  onStart: async function ({ api, event }) {
+    const sidebar = "█║ ";
+    return api.sendMessage(`${sidebar}نظام الـ Glitch الذكي\n${sidebar}❯ لوح 😯 باش تشعلو فـ هاد لڭروب.\n${sidebar}❯ لوح 🐤 باش تطفيه.`, event.threadID, event.messageID);
+  },
+
+  onChat: async function ({ api, event }) {
     const { body, senderID, threadID, messageID } = event;
-    if (!senderID || !threadID || !body) return; 
+    if (!body) return;
 
-    // 📁 تأكد بلي الكاش موجود
-    const cacheDir = path.join(__dirname, "cache");
-    if (!fs.existsSync(cacheDir)) fs.ensureDirSync(cacheDir);
-    const cachePath = path.join(cacheDir, "glitch.txt");
-
-    // 🔑 جلب الأدمينز من الكونفيغ بطريقة GoatBot الصحيحة
-    const admins = config.ADMINBOT || [];
+    // جلب الأدمينز من ملف الـ Config (الطريقة المضمونة)
+    const admins = global.config.ADMINBOT || [];
     const isAdmin = admins.includes(senderID.toString());
 
-    // ⚙️ سـوارت الـتـحـكـم
+    // ⚙️ التحكم (للأدمينز فقط)
     if (isAdmin) {
-      // تشغيل (😯)
-      if (body === "😯") { 
-        global.isGlitchActive = true; 
-        return api.setMessageReaction("💀", messageID, () => {}, true);
+      if (body === "😯") {
+        global.isGlitchActive[threadID] = true;
+        return api.setMessageReaction("😯", messageID, () => {}, true);
       }
-      // إيقاف (🐤)
-      if (body === "🐤") { 
-        global.isGlitchActive = false; 
-        return api.setMessageReaction("✅", messageID, () => {}, true); 
+      if (body === "🐤") {
+        delete global.isGlitchActive[threadID];
+        return api.setMessageReaction("✅", messageID, () => {}, true);
       }
     }
 
-    // 🛡️ منطق الرد الذكي
-    if (global.isGlitchActive && !isAdmin) {
+    // 🛡️ منطق الرد الذكي (5 ثواني)
+    if (global.isGlitchActive[threadID] && !isAdmin) {
       const now = Date.now();
       const cooldown = 5000; 
 
       if (!global.lastGlitchSent[threadID] || (now - global.lastGlitchSent[threadID] >= cooldown)) {
+        const cachePath = path.join(__dirname, "cache", "glitch.txt");
         let glitchText = "Z̷y̶p̵h̸e̶r̸ ̷S̶y̸s̵t̶e̵m̵ ̷E̷r̵r̸o̷r̸";
         
         if (fs.existsSync(cachePath)) {
