@@ -9,7 +9,7 @@ const optionsWriteJSON = {
 	spaces: 2,
 	EOL: "\n"
 };
-// by ShAn
+
 const taskQueue = new TaskQueue(function (task, callback) {
 	if (getType(task) === "AsyncFunction") {
 		task()
@@ -35,7 +35,6 @@ module.exports = async function (databaseType, userModel, api, fakeGraphql) {
 
 	switch (databaseType) {
 		case "mongodb": {
-			// delete keys '_id' and '__v' in all users
 			Users = (await userModel.find({}).lean()).map(user => _.omit(user, ["_id", "__v"]));
 			break;
 		}
@@ -53,6 +52,7 @@ module.exports = async function (databaseType, userModel, api, fakeGraphql) {
 	global.db.allUserData = Users;
 
 	async function save(userID, userData, mode, path) {
+		if (!userID || isNaN(userID)) return null; // 🛡️ حماية من ID فارغ
 		try {
 			let index = _.findIndex(global.db.allUserData, { userID });
 			if (index === -1 && mode === "update") {
@@ -61,13 +61,9 @@ module.exports = async function (databaseType, userModel, api, fakeGraphql) {
 					index = _.findIndex(global.db.allUserData, { userID });
 				}
 				catch (err) {
-					throw new CustomError({
-						name: "USER_NOT_FOUND",
-						message: `Can't find user with userID: ${userID} in database`
-					});
+					return null;
 				}
 			}
-
 
 			switch (mode) {
 				case "create": {
@@ -89,9 +85,6 @@ module.exports = async function (databaseType, userModel, api, fakeGraphql) {
 							writeJsonSync(pathUsersData, global.db.allUserData, optionsWriteJSON);
 							return _.cloneDeep(userData);
 						}
-						default: {
-							break;
-						}
 					}
 					break;
 				}
@@ -106,15 +99,14 @@ module.exports = async function (databaseType, userModel, api, fakeGraphql) {
 							_.set(dataWillChange, p, userData[index]);
 						});
 					}
+					else if (path && typeof path === "string" || Array.isArray(path)) {
+						const key = Array.isArray(path) ? path[0] : path.split(".")[0];
+						dataWillChange[key] = oldUserData[key];
+						_.set(dataWillChange, path, userData);
+					}
 					else
-						if (path && typeof path === "string" || Array.isArray(path)) {
-							const key = Array.isArray(path) ? path[0] : path.split(".")[0];
-							dataWillChange[key] = oldUserData[key];
-							_.set(dataWillChange, path, userData);
-						}
-						else
-							for (const key in userData)
-								dataWillChange[key] = userData[key];
+						for (const key in userData)
+							dataWillChange[key] = userData[key];
 
 					switch (databaseType) {
 						case "mongodb": {
@@ -145,472 +137,164 @@ module.exports = async function (databaseType, userModel, api, fakeGraphql) {
 					if (index != -1) {
 						global.db.allUserData.splice(index, 1);
 						switch (databaseType) {
-							case "mongodb":
-								await userModel.deleteOne({ userID });
-								break;
-							case "sqlite":
-								await userModel.destroy({ where: { userID } });
-								break;
-							case "json":
-								writeJsonSync(pathUsersData, global.db.allUserData, optionsWriteJSON);
-								break;
+							case "mongodb": await userModel.deleteOne({ userID }); break;
+							case "sqlite": await userModel.destroy({ where: { userID } }); break;
+							case "json": writeJsonSync(pathUsersData, global.db.allUserData, optionsWriteJSON); break;
 						}
 					}
 					break;
 				}
-				default: {
-					break;
-				}
 			}
 			return null;
-		}
-		catch (err) {
-			throw err;
-		}
+		} catch (err) { return null; }
 	}
 
 	function getNameInDB(userID) {
+		if (!userID) return null;
 		const userData = global.db.allUserData.find(u => u.userID == userID);
-		if (userData)
-			return userData.name;
-		else
-			return null;
+		return userData ? userData.name : null;
 	}
 
 	async function getName(userID, checkData = true) {
-		if (isNaN(userID)) {
-			throw new CustomError({
-				name: "INVALID_USER_ID",
-				message: `The first argument (userID) must be a number, not ${typeof userID}`
-			});
+		if (!userID || isNaN(userID)) return "Facebook User"; 
+		if (checkData) {
+			const name = getNameInDB(userID);
+			if (name) return name;
 		}
-
-		if (checkData)
-			return getNameInDB(userID);
-
 		try {
 			const user = await axios.post(`https://www.facebook.com/api/graphql/?q=${`node(${userID}){name}`}`);
 			return user.data[userID].name;
-		}
-		catch (error) {
-			return getNameInDB(userID);
-		}
+		} catch (error) { return getNameInDB(userID) || "Facebook User"; }
 	}
 
 	async function getAvatarUrl(userID) {
-		if (isNaN(userID)) {
-			throw new CustomError({
-				name: "INVALID_USER_ID",
-				message: `The first argument (userID) must be a number, not ${typeof userID}`
-			});
-		}
+		if (!userID || isNaN(userID)) return "https://i.ibb.co/bBSpr5v/143086968.png";
 		try {
 			const user = await axios.post(`https://www.facebook.com/api/graphql/`, null, {
-				params: {
-					doc_id: "5341536295888250",
-					variables: JSON.stringify({ height: 500, scale: 1, userID, width: 500 })
-				}
+				params: { doc_id: "5341536295888250", variables: JSON.stringify({ height: 500, scale: 1, userID, width: 500 }) }
 			});
 			return user.data.data.profile.profile_picture.uri;
-		}
-		catch (err) {
-			return "https://i.ibb.co/bBSpr5v/143086968-2856368904622192-1959732218791162458-n.png";
-		}
+		} catch (err) { return "https://i.ibb.co/bBSpr5v/143086968.png"; }
 	}
 
 	async function create_(userID, userInfo) {
+		if (!userID || isNaN(userID)) return null;
 		const findInCreatingData = creatingUserData.find(u => u.userID == userID);
-		if (findInCreatingData)
-			return findInCreatingData.promise;
+		if (findInCreatingData) return findInCreatingData.promise;
 
 		const queue = new Promise(async function (resolve_, reject_) {
 			try {
-				if (global.db.allUserData.some(u => u.userID == userID)) {
-					throw new CustomError({
-						name: "DATA_ALREADY_EXISTS",
-						message: `User with id "${userID}" already exists in the data`
-					});
-				}
-				if (isNaN(userID)) {
-					throw new CustomError({
-						name: "INVALID_USER_ID",
-						message: `The first argument (userID) must be a number, not ${typeof userID}`
-					});
-				}
+				const existingUser = global.db.allUserData.find(u => u.userID == userID);
+				if (existingUser) return resolve_(_.cloneDeep(existingUser));
+
 				userInfo = userInfo || (await api.getUserInfo(userID))[userID];
+				if (!userInfo) return resolve_(null);
+
 				let userData = {
 					userID,
 					name: userInfo.name,
 					gender: userInfo.gender,
 					vanity: userInfo.vanity,
-					exp: 0,
-					money: 0,
-					banned: {},
-					settings: {},
-					data: {}
+					exp: 0, money: 0, banned: {}, settings: {}, data: {}
 				};
 				userData = await save(userID, userData, "create");
 				resolve_(_.cloneDeep(userData));
-			}
-			catch (err) {
-				reject_(err);
-			}
+			} catch (err) { resolve_(null); }
 			creatingUserData.splice(creatingUserData.findIndex(u => u.userID == userID), 1);
 		});
-		creatingUserData.push({
-			userID,
-			promise: queue
-		});
+		creatingUserData.push({ userID, promise: queue });
 		return queue;
 	}
 
 	async function create(userID, userInfo) {
-		return new Promise(function (resolve, reject) {
-			taskQueue.push(function () {
-				create_(userID, userInfo)
-					.then(resolve)
-					.catch(reject);
-			});
-		});
-	}
-
-
-	async function refreshInfo(userID, updateInfoUser) {
-		return new Promise(async function (resolve, reject) {
-			taskQueue.push(async function () {
-				try {
-					if (isNaN(userID)) {
-						throw new CustomError({
-							name: "INVALID_USER_ID",
-							message: `The first argument (userID) must be a number, not ${typeof userID}`
-						});
-					}
-					const infoUser = await get_(userID);
-					updateInfoUser = updateInfoUser || (await api.getUserInfo(userID))[userID];
-
-					const newData = {
-						name: updateInfoUser.name,
-						vanity: updateInfoUser.vanity,
-						gender: updateInfoUser.gender
-					};
-					let userData = {
-						...infoUser,
-						...newData
-					};
-
-					userData = await save(userID, userData, "update");
-					resolve(_.cloneDeep(userData));
-				}
-				catch (err) {
-					reject(err);
-				}
-			});
-		});
-	}
-
-	function getAll(path, defaultValue, query) {
-		return new Promise((resolve, reject) => {
-			taskQueue.push(function () {
-				try {
-					let dataReturn = _.cloneDeep(global.db.allUserData);
-
-					if (query)
-						if (typeof query !== "string")
-							throw new CustomError({
-								name: "INVALID_QUERY",
-								message: `The third argument (query) must be a string, not ${typeof query}`
-							});
-						else
-							dataReturn = dataReturn.map(uData => fakeGraphql(query, uData));
-
-					if (path)
-						if (!["string", "object"].includes(typeof path))
-							throw new CustomError({
-								name: "INVALID_PATH",
-								message: `The first argument (path) must be a string or object, not ${typeof path}`
-							});
-						else
-							if (typeof path === "string")
-								return resolve(dataReturn.map(uData => _.get(uData, path, defaultValue)));
-							else
-								return resolve(dataReturn.map(uData => _.times(path.length, i => _.get(uData, path[i], defaultValue[i]))));
-
-					return resolve(dataReturn);
-				}
-				catch (err) {
-					reject(err);
-				}
-			});
+		return new Promise((resolve) => {
+			taskQueue.push(() => create_(userID, userInfo).then(resolve).catch(() => resolve(null)));
 		});
 	}
 
 	async function get_(userID, path, defaultValue, query) {
-		if (isNaN(userID)) {
-			throw new CustomError({
-				name: "INVALID_USER_ID",
-				message: `The first argument (userID) must be a number, not ${typeof userID}`
-			});
-		}
+		if (!userID || isNaN(userID)) return null;
 		let userData;
-
 		const index = global.db.allUserData.findIndex(u => u.userID == userID);
-		if (index === -1)
-			userData = await create_(userID);
-		else
-			userData = global.db.allUserData[index];
+		if (index === -1) userData = await create_(userID);
+		else userData = global.db.allUserData[index];
 
-		if (query)
-			if (typeof query !== "string")
-				throw new CustomError({
-					name: "INVALID_QUERY",
-					message: `The fourth argument (query) must be a string, not ${typeof query}`
-				});
-
-			else
-				userData = fakeGraphql(query, userData);
-
-		if (path)
-			if (!["string", "array"].includes(typeof path))
-				throw new CustomError({
-					name: "INVALID_PATH",
-					message: `The second argument (path) must be a string or array, not ${typeof path}`
-				});
-			else
-				if (typeof path === "string")
-					return _.cloneDeep(_.get(userData, path, defaultValue));
-				else
-					return _.cloneDeep(_.times(path.length, i => _.get(userData, path[i], defaultValue[i])));
-
+		if (!userData) return null;
+		if (query && typeof query === "string") userData = fakeGraphql(query, userData);
+		if (path) {
+			if (typeof path === "string") return _.cloneDeep(_.get(userData, path, defaultValue));
+			else if (Array.isArray(path)) return _.cloneDeep(_.times(path.length, i => _.get(userData, path[i], defaultValue[i])));
+		}
 		return _.cloneDeep(userData);
 	}
 
 	async function get(userID, path, defaultValue, query) {
-		return new Promise((resolve, reject) => {
-			taskQueue.push(function () {
-				get_(userID, path, defaultValue, query)
-					.then(resolve)
-					.catch(reject);
-			});
+		return new Promise((resolve) => {
+			taskQueue.push(() => get_(userID, path, defaultValue, query).then(resolve).catch(() => resolve(null)));
 		});
 	}
 
 	async function set(userID, updateData, path, query) {
-		return new Promise((resolve, reject) => {
+		return new Promise((resolve) => {
 			taskQueue.push(async function () {
 				try {
-					if (isNaN(userID)) {
-						throw new CustomError({
-							name: "INVALID_USER_ID",
-							message: `The first argument (userID) must be a number, not ${typeof userID}`
-						});
-					}
-
-					if (!path && (typeof updateData != "object" || typeof updateData == "object" && Array.isArray(updateData)))
-						throw new CustomError({
-							name: "INVALID_UPDATE_DATA",
-							message: `The second argument (updateData) must be an object, not ${typeof updateData}`
-						});
-
+					if (!userID || isNaN(userID)) return resolve(null);
 					const userData = await save(userID, updateData, "update", path);
-					if (query)
-						if (typeof query !== "string")
-							throw new CustomError({
-								name: "INVALID_QUERY",
-								message: `The fourth argument (query) must be a string, not ${typeof query}`
-							});
-						else
-							return resolve(_.cloneDeep(fakeGraphql(query, userData)));
-
+					if (query && typeof query === "string") return resolve(_.cloneDeep(fakeGraphql(query, userData)));
 					return resolve(_.cloneDeep(userData));
-				}
-				catch (err) {
-					reject(err);
-				}
+				} catch (err) { resolve(null); }
 			});
 		});
 	}
 
-	async function deleteKey(userID, path, query) {
-		return new Promise(async function (resolve, reject) {
+	async function refreshInfo(userID, updateInfoUser) {
+		return new Promise((resolve) => {
 			taskQueue.push(async function () {
 				try {
-					if (isNaN(userID)) {
-						throw new CustomError({
-							name: "INVALID_USER_ID",
-							message: `The first argument (userID) must be a number, not a ${typeof userID}`
-						});
-					}
-					if (typeof path !== "string")
-						throw new CustomError({
-							name: "INVALID_PATH",
-							message: `The second argument (path) must be a string, not a ${typeof path}`
-						});
-					const spitPath = path.split(".");
-					if (spitPath.length == 1)
-						throw new CustomError({
-							name: "INVALID_PATH",
-							message: `Can't delete key "${path}" because it's a root key`
-						});
-					const parent = spitPath.slice(0, spitPath.length - 1).join(".");
-					const parentData = await get_(userID, parent);
-					if (!parentData)
-						throw new CustomError({
-							name: "INVALID_PATH",
-							message: `Can't find key "${parent}" in user with userID: ${userID}`
-						});
-
-					_.unset(parentData, spitPath[spitPath.length - 1]);
-					const setData = await save(userID, parentData, "update", parent);
-					if (query)
-						if (typeof query !== "string")
-							throw new CustomError({
-								name: "INVALID_QUERY",
-								message: `The fourth argument (query) must be a string, not a ${typeof query}`
-							});
-						else
-							return resolve(_.cloneDeep(fakeGraphql(query, setData)));
-					return resolve(_.cloneDeep(setData));
-				}
-				catch (err) {
-					reject(err);
-				}
+					if (!userID || isNaN(userID)) return resolve(null);
+					const infoUser = await get_(userID);
+					updateInfoUser = updateInfoUser || (await api.getUserInfo(userID))[userID];
+					const userData = await save(userID, { ...infoUser, name: updateInfoUser.name, vanity: updateInfoUser.vanity, gender: updateInfoUser.gender }, "update");
+					resolve(_.cloneDeep(userData));
+				} catch (err) { resolve(null); }
 			});
 		});
 	}
 
 	async function getMoney(userID) {
-		return new Promise((resolve, reject) => {
-			taskQueue.push(async function () {
-				try {
-					if (isNaN(userID)) {
-						throw new CustomError({
-							name: "INVALID_USER_ID",
-							message: `The first argument (userID) must be a number, not ${typeof userID}`
-						});
-					}
-					const money = await get_(userID, "money");
-					resolve(money);
-				}
-				catch (err) {
-					reject(err);
-				}
-			});
-		});
+		return (await get_(userID, "money")) || 0;
 	}
 
-	async function addMoney(userID, money, query) {
-		return new Promise((resolve, reject) => {
-			taskQueue.push(async function () {
-				try {
-					if (isNaN(userID)) {
-						throw new CustomError({
-							name: "INVALID_USER_ID",
-							message: `The first argument (userID) must be a number, not ${typeof userID}`
-						});
-					}
-					if (isNaN(money)) {
-						throw new CustomError({
-							name: "INVALID_MONEY",
-							message: `The second argument (money) must be a number, not ${typeof money}`
-						});
-					}
-					if (!global.db.allUserData.some(u => u.userID == userID))
-						await create_(userID);
-					const currentMoney = await get_(userID, "money");
-					const newMoney = currentMoney + money;
-					const userData = await save(userID, newMoney, "update", "money");
-					if (query)
-						if (typeof query !== "string")
-							throw new CustomError({
-								name: "INVALID_QUERY",
-								message: `The third argument (query) must be a string, not ${typeof query}`
-							});
-						else
-							return resolve(_.cloneDeep(fakeGraphql(query, userData)));
-
-					return resolve(_.cloneDeep(userData));
-				}
-				catch (err) {
-					reject(err);
-				}
-			});
-		});
+	async function addMoney(userID, money) {
+		const currentMoney = await getMoney(userID);
+		return await save(userID, currentMoney + money, "update", "money");
 	}
 
-	async function subtractMoney(userID, money, query) {
-		return new Promise((resolve, reject) => {
-			taskQueue.push(async function () {
-				try {
-					if (isNaN(userID)) {
-						throw new CustomError({
-							name: "INVALID_USER_ID",
-							message: `The first argument (userID) must be a number, not ${typeof userID}`
-						});
-					}
-					if (isNaN(money)) {
-						throw new CustomError({
-							name: "INVALID_MONEY",
-							message: `The second argument (money) must be a number, not ${typeof money}`
-						});
-					}
-					if (!global.db.allUserData.some(u => u.userID == userID))
-						await create_(userID);
-					const currentMoney = await get_(userID, "money");
-					const newMoney = currentMoney - money;
-					const userData = await save(userID, newMoney, "update", "money");
-					if (query)
-						if (typeof query !== "string")
-							throw new CustomError({
-								name: "INVALID_QUERY",
-								message: `The third argument (query) must be a string, not ${typeof query}`
-							});
-						else
-							return resolve(_.cloneDeep(fakeGraphql(query, userData)));
-					return resolve(_.cloneDeep(userData));
-				}
-				catch (err) {
-					reject(err);
-				}
-			});
-		});
+	async function subtractMoney(userID, money) {
+		const currentMoney = await getMoney(userID);
+		return await save(userID, currentMoney - money, "update", "money");
 	}
 
 	async function remove(userID) {
-		return new Promise((resolve, reject) => {
-			taskQueue.push(async function () {
-				try {
-					if (isNaN(userID)) {
-						throw new CustomError({
-							name: "INVALID_USER_ID",
-							message: `The first argument (userID) must be a number, not ${typeof userID}`
-						});
-					}
-					await save(userID, { userID }, "remove");
-					return resolve(true);
-				}
-				catch (err) {
-					reject(err);
-				}
-			});
-		});
+		if (!userID || isNaN(userID)) return false;
+		await save(userID, { userID }, "remove");
+		return true;
 	}
 
 	return {
-		existsSync: function existsSync(userID) {
-			return global.db.allUserData.some(u => u.userID == userID);
-		},
+		existsSync: (userID) => global.db.allUserData.some(u => u.userID == userID),
 		getName,
 		getNameInDB,
 		getAvatarUrl,
 		create,
 		refreshInfo,
-		getAll,
+		getAll: async () => _.cloneDeep(global.db.allUserData),
 		get,
 		set,
-		deleteKey,
 		getMoney,
 		addMoney,
 		subtractMoney,
 		remove
 	};
 };
+
