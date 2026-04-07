@@ -7,8 +7,8 @@ module.exports = {
     hasPermssion: 0,
     credits: "Hanji",
     description: "Gemini AI مع خاصية الرد التلقائي",
-    commandCategory: "AI",
-    usages: "[السؤال] أو [on/off]",
+    category: "AI", // هنا فين كان المشكل، دابا مريكل
+    usages: "[السؤال]",
     cooldowns: 2,
   },
 
@@ -16,16 +16,16 @@ module.exports = {
     const { threadID, messageID, senderID } = event;
     const prompt = args.join(" ");
 
-    if (!prompt) return api.sendMessage("خاي هانجي، كتب شي حاجة ولا دير ريبلاي للبوت!", threadID, messageID);
+    if (!prompt) return api.sendMessage("خاي هانجي، كتب شي سؤال ولا دير ريبلاي للبوت!", threadID, messageID);
 
-    return JSON.stringify(this.handleAI(prompt, api, event));
+    return await this.handleAI(prompt, api, event);
   },
 
   handleReply: async function({ api, event, handleReply }) {
-    const { threadID, messageID, body } = event;
-    if (handleReply.author != event.senderID) return; // اختياري: باش يجاوب غير اللي بدا الهضرة
+    const { body } = event;
+    if (handleReply.author != event.senderID) return; 
     
-    return this.handleAI(body, api, event);
+    return await this.handleAI(body, api, event);
   },
 
   handleAI: async function(prompt, api, event) {
@@ -47,7 +47,7 @@ module.exports = {
         });
       }, messageID);
     } catch (error) {
-      api.sendMessage("تعذر الاتصال بـ Gemini، جرب مرة أخرى.", threadID, messageID);
+      api.sendMessage("وقع مشكل فالاتصال، حاول مرة أخرى.", threadID, messageID);
     }
   }
 };
