@@ -4,16 +4,15 @@ const path = require("path");
 module.exports = {
   config: {
     name: "glitch",
-    version: "3.0.5",
+    version: "3.1.0",
     author: "Hanji",
     countDown: 0,
-    role: 2, 
+    role: 2, // الأدمينز فقط هما اللي غايقدروا يخدموه
     category: "FUN",
-    shortDescription: { en: "Smart anti-spam glitch mode" }
+    shortDescription: { en: "Smart glitch mode with simplified admin check" }
   },
 
   onLoad: function () {
-    // تجهيز الملف والذاكرة بنفس ستايل 1sp
     const cachePath = path.join(__dirname, "cache", "glitch.txt");
     if (!fs.existsSync(path.join(__dirname, "cache"))) fs.ensureDirSync(path.join(__dirname, "cache"));
     if (!fs.existsSync(cachePath)) {
@@ -25,31 +24,30 @@ module.exports = {
 
   onStart: async function ({ api, event }) {
     const sidebar = "█║ ";
-    return api.sendMessage(`${sidebar}نظام الـ Glitch الذكي\n${sidebar}❯ لوح 😯 باش تشعلو فـ هاد لڭروب.\n${sidebar}❯ لوح 🐤 باش تطفيه.`, event.threadID, event.messageID);
+    return api.sendMessage(`${sidebar}نظام الـ Glitch الذكي 🤖\n${sidebar}❯ لوح 😯 باش تبدا القمع.\n${sidebar}❯ لوح 🐤 باش تحبسو.`, event.threadID, event.messageID);
   },
 
   onChat: async function ({ api, event }) {
-    const { body, senderID, threadID, messageID } = event;
+    const { body, threadID, messageID, senderID } = event;
     if (!body) return;
 
-    // جلب الأدمينز من ملف الـ Config (الطريقة المضمونة)
-    const admins = global.config.ADMINBOT || [];
-    const isAdmin = admins.includes(senderID.toString());
+    // 🥢 --- [ إيموجي البداية: 😯 ] ---
+    if (body === "😯") {
+      global.isGlitchActive[threadID] = true;
+      return api.setMessageReaction("😯", messageID, () => {}, true);
+    }
 
-    // ⚙️ التحكم (للأدمينز فقط)
-    if (isAdmin) {
-      if (body === "😯") {
-        global.isGlitchActive[threadID] = true;
-        return api.setMessageReaction("😯", messageID, () => {}, true);
-      }
-      if (body === "🐤") {
+    // 🐤 --- [ إيموجي النهاية: 🐤 ] ---
+    if (body === "🐤") { 
+      if (global.isGlitchActive[threadID]) {
         delete global.isGlitchActive[threadID];
         return api.setMessageReaction("✅", messageID, () => {}, true);
       }
     }
 
-    // 🛡️ منطق الرد الذكي (5 ثواني)
-    if (global.isGlitchActive[threadID] && !isAdmin) {
+    // 🛡️ --- [ منطق الرد الذكي: 5 ثواني ] ---
+    // البوت غايرد غير إيلا كان الـ Glitch شاعل و اللي كيهضر ماشي هو اللي شعل الأمر
+    if (global.isGlitchActive[threadID]) {
       const now = Date.now();
       const cooldown = 5000; 
 
