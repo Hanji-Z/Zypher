@@ -1,53 +1,70 @@
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
+// 🚩 إعدادات النظام
+if (global.isAiActive === undefined) global.isAiActive = false;
+
 module.exports = {
   config: {
     name: "ai1",
-    version: "1.1.0",
-    hasPermssion: 0,
-    credits: "Hanji",
-    description: "Gemini AI مع خاصية الرد التلقائي",
-    category: "AI", // هنا فين كان المشكل، دابا مريكل
-    usages: "[السؤال]",
-    cooldowns: 2,
+    version: "1.5.0",
+    author: "Hanji",
+    countDown: 5,
+    role: 0, // أي واحد يقدر يهضر معاه، ولكن الأونر هو اللي كيشعلو
+    category: "AI",
+    shortDescription: { en: "Smart Gemini AI with Reply-only mode" }
   },
 
-  run: async function({ api, event, args }) {
-    const { threadID, messageID, senderID } = event;
-    const prompt = args.join(" ");
-
-    if (!prompt) return api.sendMessage("خاي هانجي، كتب شي سؤال ولا دير ريبلاي للبوت!", threadID, messageID);
-
-    return await this.handleAI(prompt, api, event);
+  onStart: async function ({}) {
+    // ضرورية لـ GoatBot V2
   },
 
-  handleReply: async function({ api, event, handleReply }) {
-    const { body } = event;
-    if (handleReply.author != event.senderID) return; 
-    
-    return await this.handleAI(body, api, event);
-  },
+  onChat: async function ({ api, event, args }) {
+    const { body, senderID, threadID, messageID, type, messageReply } = event;
+    const admins = global.config.ADMINBOT || [];
+    const isAdmin = admins.includes(senderID);
 
-  handleAI: async function(prompt, api, event) {
-    const { threadID, messageID, senderID } = event;
-    const genAI = new GoogleGenerativeAI("AIzaSyDVkSFH8jzdaSuEfc4waiC9aqGu6eQiW80");
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    // 1️⃣ التحكم فـ التشغيل والإيقاف (للأونر فقط)
+    if (isAdmin) {
+      if (body?.toLowerCase() === "ai on") {
+        global.isAiActive = true;
+        return api.sendMessage("✅ تم تفعيل", threadID, messageID);
+      }
+      if (body?.toLowerCase() === "ai off") {
+        global.isAiActive = false;
+        return api.sendMessage("❌ تم إيقاف ", threadID, messageID);
+      }
+    }
 
-    try {
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
+    // 2️⃣ منطق الرد الذكي
+    if (global.isAiActive && type === "message_reply") {
+      
+      // كيكمل غير إيلا كان الرد موجه للبوت (نفس الـ ID ديال البوت)
+      if (messageReply.senderID === api.getCurrentUserID()) {
+        
+        try {
+          // 🔑 حط الـ API Key ديالك هنا
+          const genAI = new GoogleGenerativeAI("AIzaSyAHCwjXNdPOqQA2FCWzANk7-t1xlLTDtuQ");
+          const model = genAI.getGenerativeModel({ 
+            model: "gemini-1.5-flash",
+            systemInstruction: "أنت هو 'زيفر'، مساعد ذكي وحكيم. مهمتك هي تعطي معلومات دقيقة وتفيد بنادم. الستايل ديالك هو الدارجة المغربية الرزينة. جاوب بوضوح، استعمل أمثلة من الواقع المغربي، وخليك ديما مساعد ومفيد. ديما فكر الأعضاء بلي هانجي هو اللي عطاك هاد الحكمة."
+          });
 
-      api.sendMessage(text, threadID, (err, info) => {
-        if (err) return;
-        global.client.handleReply.push({
-          name: this.config.name,
-          messageID: info.messageID,
-          author: senderID
-        });
-      }, messageID);
-    } catch (error) {
-      api.sendMessage("وقع مشكل فالاتصال، حاول مرة أخرى.", threadID, messageID);
+          const prompt = body;
+          if (!prompt) return;
+
+          api.setMessageReaction("🌀", messageID, () => {}, true);
+
+          const result = await model.generateContent(prompt);
+          const response = await result.response;
+          const text = response.text();
+
+          return api.sendMessage(text, threadID, messageID);
+
+        } catch (error) {
+          console.error("Gemini Error:", error);
+          return api.sendMessage("⚠️ وقع خطأ فـ التواصل مع السيرفر ديال الذكاء الاصطناعي.", threadID, messageID);
+        }
+      }
     }
   }
 };
