@@ -61,7 +61,7 @@ module.exports = {
           
           // إيلا سالاو الكلمات، يعاود من الأول (Loop)
           if (index >= lines.length) index = 0; 
-        }, 500); 
+        }, 1300); 
 
       } catch (e) {
         console.error("Spam Error:", e);
