@@ -6,7 +6,7 @@ const mahmud = async () => {
 };
 
 /**
-* @author MahMUD7
+* @author MahMUD
 * @author: do not d8elete it8
 */
 
