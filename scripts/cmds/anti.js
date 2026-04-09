@@ -4,12 +4,12 @@ module.exports = {
 	config: {
 		name: "anti", 
 		aliases: ["ac", "antichange"],
-		version: "3.5",
-		author: "𝗦𝗵𝗔𝗻 & Gemini",
+		version: "4.0",
+		author: "𝗦𝗵𝗔𝗻 & Hanji (Gemini)",
 		countDown: 5,
-		role: 2, // للمطور فقط يتحكم فـ التشغيل/الإيقاف
+		role: 2, 
 		description: {
-			en: "Anti-change for Group Info (Optimized with Anti-Spam Lock)"
+			en: "Anti-change for Group Info with Ghost-NC Shield"
 		},
 		category: "GROUP",
 		guide: {
@@ -61,17 +61,42 @@ module.exports = {
 		}
 	},
 
+    // 🛡️ [ الرادار الجديد ] - كايصيد التغييرات المخفية فـ الكنيات
+    onChat: async function ({ event, threadsData, api }) {
+        const { threadID, senderID } = event;
+        const botID = api.getCurrentUserID();
+
+        if (senderID === botID) return;
+
+        const dataAntiChange = await threadsData.get(threadID, "data.antiChangeInfoBox", {});
+        if (!dataAntiChange.nickname) return;
+
+        const adminBot = global.GoatBot.config.adminBot || [];
+        if (adminBot.includes(senderID)) return;
+
+        try {
+            // كنجيبو معلومات لڭروب باش نشوفو الكنية الحقيقية دابا
+            const threadInfo = await api.getThreadInfo(threadID);
+            const currentNickname = threadInfo.nicknames[senderID] || "";
+            const savedNickname = dataAntiChange.nickname[senderID] || "";
+
+            // إيلا الكنية متبدلة على اللي فالداتابيز، رجعها ساكت
+            if (currentNickname !== savedNickname) {
+                api.changeNickname(savedNickname, threadID, senderID);
+            }
+        } catch (e) {
+            // فشل صامت
+        }
+    },
+
 	onEvent: async function ({ event, threadsData, api }) {
 		const { threadID, logMessageType, logMessageData, author } = event;
 		const botID = api.getCurrentUserID();
 
-		// 1. لا نتدخل إذا كان المغير هو البوت (منع التكرار اللانهائي)
 		if (author === botID) return;
 
 		const dataAntiChange = await threadsData.get(threadID, "data.antiChangeInfoBox", {});
 		const adminBot = global.GoatBot.config.adminBot || [];
-		
-		// 🛡️ فحص الصلاحية: هل المغير مطور للبوت؟
 		const isBotAdmin = adminBot.includes(author);
 
 		switch (logMessageType) {
@@ -91,28 +116,19 @@ module.exports = {
 
 			case "log:thread-name": {
 				if (!dataAntiChange.hasOwnProperty("name")) return;
-
-				// --- [ 🔒 نظام منع الهيستيريا / 𝗔𝗻𝘁𝗶-𝗦𝗽𝗮𝗺 𝗟𝗼𝗰𝗸 ] ---
 				if (!global.antiNameLock) global.antiNameLock = {};
 				const now = Date.now();
 				const lastAction = global.antiNameLock[threadID] || 0;
-
-				// إذا تم تغيير الاسم في أقل من 5 ثوانٍ، نتجاهل الحدث
 				if (now - lastAction < 1500) return;
 
 				const newName = logMessageData.name;
 				const oldName = dataAntiChange.name;
-
-				// إذا كان الاسم الجديد هو نفسه القديم (تم إرجاعه بالفعل)، نسكت
 				if (newName === oldName) return;
 
 				if (!isBotAdmin) {
-					global.antiNameLock[threadID] = now; // تفعيل القفل الزمني
-					api.setTitle(oldName, threadID, (err) => {
-						if (!err) api.setMessageReaction("🛡️", event.messageID, () => {}, true);
-					});
+					global.antiNameLock[threadID] = now;
+					api.setTitle(oldName, threadID); // حيدنا الريكاكشن باش يبقى ساكت
 				} else {
-					// تحديث قاعدة البيانات إذا كان المغير هو المطور
 					await threadsData.set(threadID, newName, "data.antiChangeInfoBox.name");
 				}
 				break;
@@ -126,7 +142,7 @@ module.exports = {
 				if (nickname === oldNick) return;
 
 				if (!isBotAdmin) {
-					api.changeNickname(oldNick, threadID, participant_id);
+					api.changeNickname(oldNick, threadID, participant_id); // حيدنا أي ميساج ولا ريكاكشن
 				} else {
 					await threadsData.set(threadID, nickname, `data.antiChangeInfoBox.nickname.${participant_id}`);
 				}
@@ -135,4 +151,3 @@ module.exports = {
 		}
 	}
 };
-
