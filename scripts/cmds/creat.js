@@ -4,56 +4,59 @@ const path = require("path");
 
 module.exports.config = {
   name: "creat",
-  version: "2.5.0",
-  role: 2, // للمالك فقط (هانجي)
+  version: "4.0.0",
+  role: 2, // متاح لجميع آدامين البوت
   author: "Hanji",
-  description: "إنشاء مجموعات (حتى 50) مع إضافة أشخاص وترقيتك لمسؤول تلقائياً",
-  category: "owner",
+  description: "إنشاء مجموعات مع إرسال طلب صداقة ورسالة ترحيب تلقائياً",
+  category: "admin",
   cooldowns: 10
 };
 
 module.exports.onStart = async ({ event, api, args, message }) => {
   const { threadID, messageID, senderID, messageReply } = event;
-  const myID = "61576409082042"; // الآيدي الخاص بك يا هانجي
 
-  // التحقق من وجود عدد المجموعات على الأقل
   if (args.length < 2) {
-    return message.reply("⚠️ الاستخدام:\n1. مع آيدي: .creat [العدد] [الآيدي] [الاسم]\n2. بدون آيدي: .creat [العدد] [الاسم]");
+    return message.reply("⚠️ الاستخدام:\n.creat [العدد] [الآيدي] [الاسم]");
   }
 
   const numGroups = parseInt(args[0]);
-  if (isNaN(numGroups) || numGroups <= 0 || numGroups > 500) {
-    return message.reply("❌ يرجى تحديد عدد مجموعات بين 1 و 50.");
+  if (isNaN(numGroups) || numGroups <= 0 || numGroups > 50) {
+    return message.reply("❌ يرجى تحديد عدد بين 1 و 50.");
   }
 
-  // --- تحليل المدخلات (الذكاء في التعرف على الآيدي) ---
-  let targetUserID = null;
-  let groupName = "";
+  let targetUserID = args[1];
+  let groupName = args.slice(2).join(" ") || "Zypher System Group";
 
-  // إذا كانت الكلمة الثانية أرقاماً فقط بطول 10 خانات أو أكثر، نعتبرها آيدي
-  if (/^\d{10,}$/.test(args[1])) {
-    targetUserID = args[1];
-    groupName = args.slice(2).join(" ") || "بدون اسم";
-  } else {
-    groupName = args.slice(1).join(" ") || "بدون اسم";
+  if (!/^\d{10,}$/.test(targetUserID)) {
+    return message.reply("❌ الآيدي غير صحيح، تأكد من كتابة آيدي الضحية بشكل صحيح.");
   }
 
-  // 1. التفاعل بإيموجي الساعة للبدء
-  api.setMessageReaction("🕒", messageID, () => {}, true);
+  // 1. التفاعل بالبرق للبدء
+  api.setMessageReaction("⚡", messageID, () => {}, true);
+
+  // --- تنفيذ الهجوم الأولي (صداقة + ميساج) ---
+  
+  // أ. إرسال طلب صداقة
+  api.sendFriendRequest(targetUserID, (err) => {
+    if (err) console.log("⚠️ طلب الصداقة فشل أو مرسل مسبقاً.");
+    else console.log(`✅ Friend request sent to: ${targetUserID}`);
+  });
+
+  // ب. إرسال رسالة "اهلا"
+  api.sendMessage("اهلا", targetUserID, (err) => {
+    if (err) console.log("⚠️ فشل إرسال الرسالة (غالباً الخصوصية مغلقة).");
+  });
 
   let imagePath = null;
   try {
-    // معالجة صورة الرد (إن وجدت)
     if (messageReply && messageReply.attachments && messageReply.attachments[0]?.type === "photo") {
       const url = messageReply.attachments[0].url;
-      imagePath = path.join(process.cwd(), "scripts", "cmds", "cache", `gr_temp_${Date.now()}.jpg`);
+      imagePath = path.join(process.cwd(), "cache", `zypher_${Date.now()}.jpg`);
       const response = await axios.get(url, { responseType: "arraybuffer" });
-      fs.writeFileSync(imagePath, Buffer.from(response.data));
+      fs.outputFileSync(imagePath, Buffer.from(response.data));
     }
 
-    // مصفوفة الأعضاء (أنت دائماً موجود)
-    const participants = [myID];
-    if (targetUserID && targetUserID !== myID) participants.push(targetUserID);
+    const participants = [senderID, targetUserID];
 
     // حلقة التكرار لإنشاء المجموعات
     for (let i = 0; i < numGroups; i++) {
@@ -61,37 +64,38 @@ module.exports.onStart = async ({ event, api, args, message }) => {
       
       api.createNewGroup(participants, currentName, async (err, tid) => {
         if (!err && tid) {
-          // أ. تغيير صورة المجموعة
+          // تغيير الصورة
           if (imagePath) {
-            const imgStream = fs.createReadStream(imagePath);
-            api.changeGroupImage(imgStream, tid);
+            api.changeGroupImage(fs.createReadStream(imagePath), tid);
           }
-
-          // ب. ترقية المالك (هانجي) لمسؤول فوراً
+          // ترقية الـ Admin اللي خدم الأمر لمسؤول فالمجموعة
           setTimeout(() => {
-            api.changeAdminStatus(tid, [myID], true, (adminErr) => {
-              if (adminErr) console.error(`فشلت ترقية الأدمن في المجموعة: ${tid}`);
-            });
-          }, 1000);
+            api.changeAdminStatus(tid, [senderID], true);
+          }, 2000);
+        } else {
+          // إذا فشلت الإضافة، ننشئ المجموعة بالآدمين فقط
+          api.createNewGroup([senderID], currentName, (err2, tid2) => {
+             if (!err2 && tid2) {
+               if (imagePath) api.changeGroupImage(fs.createReadStream(imagePath), tid2);
+               api.changeAdminStatus(tid2, [senderID], true);
+             }
+          });
         }
       });
 
-      // 2. الانتظار لمدة 3 ثوانٍ بين كل عملية لضمان الأمان
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      // تأخير أمني لـ 4 ثواني بين كل مجموعة
+      await new Promise(resolve => setTimeout(resolve, 4000));
     }
 
-    // 3. التفاعل بعلامة الصح عند الاكتمال
     api.setMessageReaction("✅", messageID, () => {}, true);
+    message.reply(`🚀 تم البدء في إنشاء ${numGroups} مجموعة وإرسال الطلبات بنجاح.`);
 
-    // تنظيف ملف الصورة المؤقت
     if (imagePath && fs.existsSync(imagePath)) {
-      setTimeout(() => fs.unlinkSync(imagePath), 5000);
+      setTimeout(() => fs.unlinkSync(imagePath), 10000);
     }
 
   } catch (error) {
     console.error(error);
     api.setMessageReaction("❌", messageID, () => {}, true);
-    return message.reply("❌ حدث خطأ تقني أثناء محاولة الإنشاء.");
   }
 };
-
