@@ -1,70 +1,73 @@
-const { GoogleGenerativeAI } = require("@google/generative-ai");
-
-// 🚩 إعدادات النظام
-if (global.isAiActive === undefined) global.isAiActive = false;
+const axios = require("axios");
 
 module.exports = {
   config: {
     name: "ai1",
-    version: "1.5.0",
+    aliases: ["جيميني", "2i2y", "gemini"],
+    version: "6.0.0",
     author: "Hanji",
     countDown: 5,
-    role: 0, // أي واحد يقدر يهضر معاه، ولكن الأونر هو اللي كيشعلو
+    role: 0,
+    description: { en: "Chat with Zipher (Gemini Fusha Mode) 🌹" },
     category: "AI",
-    shortDescription: { en: "Smart Gemini AI with Reply-only mode" }
+    guide: { en: "{pn} [on | off]" }
   },
 
-  onStart: async function ({}) {
-    // ضرورية لـ GoatBot V2
-  },
+  onStart: async function ({ message, event, args, threadsData }) {
+    const { threadID } = event;
+    const status = args[0]?.toLowerCase();
 
-  onChat: async function ({ api, event, args }) {
-    const { body, senderID, threadID, messageID, type, messageReply } = event;
-    const admins = global.config.ADMINBOT || [];
-    const isAdmin = admins.includes(senderID);
-
-    // 1️⃣ التحكم فـ التشغيل والإيقاف (للأونر فقط)
-    if (isAdmin) {
-      if (body?.toLowerCase() === "ai on") {
-        global.isAiActive = true;
-        return api.sendMessage("✅ تم تفعيل", threadID, messageID);
-      }
-      if (body?.toLowerCase() === "ai off") {
-        global.isAiActive = false;
-        return api.sendMessage("❌ تم إيقاف ", threadID, messageID);
-      }
+    if (!["on", "off"].includes(status)) {
+      return message.reply("⚠️ استخدم: .ai on للتشغيل أو .ai off للإيقاف.");
     }
 
-    // 2️⃣ منطق الرد الذكي
-    if (global.isAiActive && type === "message_reply") {
-      
-      // كيكمل غير إيلا كان الرد موجه للبوت (نفس الـ ID ديال البوت)
-      if (messageReply.senderID === api.getCurrentUserID()) {
-        
-        try {
-          // 🔑 حط الـ API Key ديالك هنا
-          const genAI = new GoogleGenerativeAI("AIzaSyAHCwjXNdPOqQA2FCWzANk7-t1xlLTDtuQ");
-          const model = genAI.getGenerativeModel({ 
-            model: "gemini-1.5-flash",
-            systemInstruction: "أنت هو 'زيفر'، مساعد ذكي وحكيم. مهمتك هي تعطي معلومات دقيقة وتفيد بنادم. الستايل ديالك هو الدارجة المغربية الرزينة. جاوب بوضوح، استعمل أمثلة من الواقع المغربي، وخليك ديما مساعد ومفيد. ديما فكر الأعضاء بلي هانجي هو اللي عطاك هاد الحكمة."
-          });
+    await threadsData.set(threadID, status === "on", "data.aiEnabled");
+    const statusMsg = status === "on" ? "نشط 😏" : "متوقف 💤";
+    
+    return message.reply(`[ 𝗭𝗬𝗣𝗛𝗘𝗥 - 𝗚𝗘𝗠𝗜𝗡𝗜 ]\n❯ الحالة: ${statusMsg}`);
+  },
 
-          const prompt = body;
-          if (!prompt) return;
+  onChat: async function ({ event, threadsData, api, message, usersData }) {
+    const { threadID, body, senderID, type, messageReply } = event;
+    const botID = api.getCurrentUserID();
+    
+    // ضع مفتاح Gemini API هنا
+    const apiKey = "AIzaSyAV6BolXFrQSayMEjeG7Gmy4NnXILIB1rE"; 
 
-          api.setMessageReaction("🌀", messageID, () => {}, true);
+    if (type !== "message_reply" || senderID === botID || !body) return;
+    if (!messageReply || messageReply.senderID !== botID) return;
 
-          const result = await model.generateContent(prompt);
-          const response = await result.response;
-          const text = response.text();
+    const isAiEnabled = await threadsData.get(threadID, "data.aiEnabled", false);
+    if (!isAiEnabled) return;
 
-          return api.sendMessage(text, threadID, messageID);
+    try {
+      const name = await usersData.getName(senderID);
+      const systemInstruction = `أنت 'زيفر' (Zipher)، ذكاء اصطناعي فصيح، لبق، وراقي جداً.
+                        - لغتك: اللغة العربية الفصحى فقط، بأسلوب أدبي رفيع.
+                        - المطور: مطورك هو 'هانجي' (Hanji). تحدث عنه كأنه مهندس عظيم ومبتكرك الوحيد بكل فخر.
+                        - مع الإناث: كن "عنّاباً" (Charming)، استخدم كلمات رقيقة، محترمة، وساحرة تليق بمقامهن.
+                        - الهوية: أنت واثق من نفسك، ذكي، ولا تستخدم أي زخارف تقنية في ردودك.
+                        - اسم الشخص الذي يحاورك الآن: ${name}.`;
 
-        } catch (error) {
-          console.error("Gemini Error:", error);
-          return api.sendMessage("⚠️ وقع خطأ فـ التواصل مع السيرفر ديال الذكاء الاصطناعي.", threadID, messageID);
+      const res = await axios.post(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+        {
+          contents: [{ parts: [{ text: body }] }],
+          systemInstruction: { parts: [{ text: systemInstruction }] }
+        },
+        { headers: { "Content-Type": "application/json" } }
+      );
+
+      if (res.data && res.data.candidates && res.data.candidates[0].content.parts[0].text) {
+        let response = res.data.candidates[0].content.parts[0].text.trim();
+        if (response !== "") {
+          // الرد بنص عادي كما طلبت
+          return api.sendMessage(response, threadID, event.messageID);
         }
       }
+      
+    } catch (error) {
+      console.error("Zipher Gemini Error:", error.response ? error.response.data : error.message);
     }
   }
 };
