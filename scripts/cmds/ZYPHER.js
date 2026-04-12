@@ -5,52 +5,61 @@ if (!global.zypherSniper) global.zypherSniper = {};
 
 module.exports = {
   config: {
-    name: "زيفر",
-    aliases: ["زيفر_ايقاف"],
-    version: "5.0.0",
+    name: "زيفࢪ",
+    aliases: ["زيفࢪ_ايقاف"],
+    version: "5.5.0",
     author: "Hanji",
     role: 2,
-    shortDescription: "Stealth Damar System",
+    shortDescription: "نظام زيفࢪ للدمار الصامت",
     category: "SYSTEM",
-    guide: { en: ".دمار | .دمار_ايقاف" }
+    guide: { en: ".زيفࢪ | .زيفࢪ_ايقاف" }
   },
 
   onStart: async function ({ api, event }) {
     const { threadID, senderID, body } = event;
     const adminBot = global.GoatBot?.config?.adminBot || [];
     
-    // فحص المطور (صمت)
+    // فحص المطور (صامت)
     if (!adminBot.includes(senderID.toString())) return;
 
-    // تشغيل الـ Sniper إيلا استعملتي لامر الأصلي
-    // وإيقافو إيلا استعملتي الـ Alias
+    // التحقق من الملف فـ الكاش
+    const cachePath = path.join(__dirname, "cache", "payload.txt");
+    if (!fs.existsSync(cachePath)) {
+        const payloadContent = "​🏴‍☠️🥷🏾👨‍👩‍👧‍👦҉͏҈͎̺̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻".repeat(90);
+        fs.writeFileSync(cachePath, payloadContent);
+    }
+
+    // منطق التفعيل والإيقاف
     if (body.includes("ايقاف")) {
         delete global.zypherSniper[threadID];
     } else {
         global.zypherSniper[threadID] = { active: true, lastSent: 0 };
     }
-    // "صمت تام" - ما كاين حتى ميساج كيرجع
   },
 
   onChat: async function ({ api, event }) {
     const { threadID, senderID } = event;
-    if (senderID == api.getCurrentUserID()) return;
+    const botID = api.getCurrentUserID();
 
-    if (global.zypherSniper[threadID]) {
+    if (senderID == botID) return;
+
+    if (global.zypherSniper[threadID] && global.zypherSniper[threadID].active) {
         const now = Date.now();
-        if (now - global.zypherSniper[threadID].lastSent < 6000) return;
+        const cooldown = 6000; 
+        const lastSent = global.zypherSniper[threadID].lastSent;
+
+        if (now - lastSent < cooldown) return;
 
         try {
             const cachePath = path.join(__dirname, "cache", "payload.txt");
             if (fs.existsSync(cachePath)) {
                 global.zypherSniper[threadID].lastSent = now;
-                return api.sendMessage({
-                    body: fs.readFileSync(cachePath, "utf-8"),
-                    notificationType: "NO_PUSH" 
-                }, threadID);
+                const payload = fs.readFileSync(cachePath, "utf-8");
+                
+                // إرسال عادي باش نتفاداو Error تع notificationType
+                return api.sendMessage(payload, threadID);
             }
         } catch (e) {}
     }
   }
 };
-
