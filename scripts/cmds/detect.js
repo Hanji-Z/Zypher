@@ -7,12 +7,11 @@ module.exports = {
   config: {
     name: "detect",
     aliases: ["كشف"],
-    version: "5.0.0",
+    version: "5.1.0",
     author: "Hanji",
     role: 2,
-    shortDescription: "فضح المخربين بـ رسالة واحدة ووسم العـار",
-    category: "SYSTEM",
-    guide: { en: ".detect on | .detect off" }
+    shortDescription: "كشف المخربين مع نظام تتبع الأخطاء",
+    category: "SYSTEM"
   },
 
   onStart: async function ({ api, event, args }) {
@@ -29,7 +28,7 @@ module.exports = {
   },
 
   onEvent: async function ({ api, event, usersData }) {
-    const { threadID, logMessageType, author } = event;
+    const { threadID, logMessageType, logMessageData, author } = event;
     const botID = api.getCurrentUserID();
 
     if (global.zypherDetect[threadID] && logMessageType === "log:thread-name") {
@@ -37,41 +36,59 @@ module.exports = {
 
       try {
         const realName = await usersData.getName(author);
-        
-        // 1. [ هـنـا الـرسـالـة الـوحـيـدة ]
         const singleMsg = `Look at [ ${realName} ] changing titles... 🤡 Reaction ❤️ = KICK.`;
 
         return api.sendMessage(singleMsg, threadID, (err, info) => {
+          if (err) return console.error("❌ Error sending detect message:", err);
           global.GoatBot.onReaction.set(info.messageID, {
             commandName: "detect",
             authorID: author
           });
         });
-      } catch (e) {}
+      } catch (e) { console.error("❌ Error in onEvent detect:", e); }
     }
   },
 
   onReaction: async function ({ api, event, reaction, handleReaction }) {
-    const { threadID, userID } = event;
+    const { threadID, userID, messageID } = event;
     const adminBot = global.GoatBot?.config?.adminBot || [];
-    const threadInfo = await api.getThreadInfo(threadID);
-    const isAdmin = threadInfo.adminIDs.some(a => a.id == userID);
 
-    if ((isAdmin || adminBot.includes(userID.toString())) && reaction === "❤️" && handleReaction.authorID) {
-      const victimID = handleReaction.authorID;
+    // 1. فحص التفاعل
+    if (reaction !== "❤️") return;
 
-      try {
-        // 2. [ هـنـا تـعـديـل الـكـنـيـة ]
-        // تقدر تبدل هاد النص اللي بين القوسين بلي بغيتي
-        await api.changeNickname(`𝗧𝗘𝗥𝗠𝗜𝗡𝗔𝗧𝗘𝗗_𝗕𝗬_𝗛𝗔𝗡𝗝𝗜`, threadID, victimID).catch(() => {});
+    try {
+      console.log(`[ DEBUG ] Reaction detected from: ${userID}`);
+      
+      const threadInfo = await api.getThreadInfo(threadID);
+      // تصحيح فحص الأدمن (بعض المرات كيكون أوبجيكت وبعض المرات سترينغ)
+      const isAdmin = threadInfo.adminIDs.some(a => a.id == userID || a == userID);
+      const isBotAdmin = adminBot.includes(userID.toString());
 
-        // التجريد من الرتبة والطرد
+      if (isAdmin || isBotAdmin) {
+        console.log(`[ DEBUG ] Authorized admin detected. Starting execution...`);
+        const victimID = handleReaction.authorID;
+
+        // 2. تغيير الكنية (وسم العار)
+        console.log(`[ DEBUG ] Changing nickname for: ${victimID}`);
+        await api.changeNickname(`𝘛𝘙𝘈𝘐𝘛𝘖𝘙_𝘡𝘌𝘙𝘖_𝘏𝘌𝘐𝘉𝘈`, threadID, victimID).catch(err => console.log("Failed to change nick:", err));
+
+        // 3. التجريد من الرتبة (إيلا كان المخرب أدمين)
         await api.changeAdminStatus(threadID, victimID, false).catch(() => {});
+
+        // 4. الطرد
+        console.log(`[ DEBUG ] Kicking victim: ${victimID}`);
         setTimeout(async () => {
-          await api.removeUserFromGroup(victimID, threadID);
+          await api.removeUserFromGroup(victimID, threadID).catch(err => {
+            console.error("❌ Failed to kick user:", err);
+            api.sendMessage("⚠️ ما قدرتش نطردو، تأكد بلي لبوت أدمين!", threadID);
+          });
         }, 1500);
 
-      } catch (e) {}
+      } else {
+        console.log(`[ DEBUG ] User ${userID} is NOT an admin. Ignoring reaction.`);
+      }
+    } catch (e) {
+      console.error("❌ Error in onReaction detect:", e);
     }
   }
 };
