@@ -1,100 +1,71 @@
 const axios = require("axios");
-const fs = require("fs");
+const fs = require("fs-extra");
 const path = require("path");
-const FormData = require("form-data");
 
 module.exports = {
   config: {
     name: "4k",
-    version: "1.5",
-    author: "Arafat",
+    version: "1.0.5",
+    author: "Hanji",
+    countDown: 10,
     role: 0,
+    shortDescription: "تحويل جودة الصورة إلى 4K",
     category: "image",
-    shortDescription: { en: "Enhance image to 4K" },
-    longDescription: { en: "Reply to an image to get a 4K enhanced version" },
-    guide: { en: "Reply to an image with: 4k" }
+    guide: { en: "قم بالرد على صورة بـ .4k" }
   },
 
-  onStart: async function ({ event, message }) {
-    const startTime = Date.now();
+  onStart: async function ({ api, event, message }) {
+    const { threadID, messageID, messageReply } = event;
 
     try {
-      if (
-        !event.messageReply ||
-        !event.messageReply.attachments ||
-        event.messageReply.attachments[0].type !== "photo"
-      ) {
-        return message.reply(
-          "❌ Please reply to an image and type: 4k"
-        );
+      // 1. التاكد من وجود الصورة
+      if (!messageReply || !messageReply.attachments || messageReply.attachments.length === 0 || messageReply.attachments[0].type !== "photo") {
+        return api.sendMessage("⚠️ أ هانجي، خاصك ترد على شي تصويرة باش نخدم!", threadID, messageID);
       }
 
-      const imageUrl = event.messageReply.attachments[0].url;
+      const imageUrl = messageReply.attachments[0].url;
+      api.sendMessage("⏳ يتم الآن رفع الجودة إلى 4K... انتظر قليلاً يا صديقي.", threadID, messageID);
 
-      const cacheDir = path.join(__dirname, "..", "..", "cache");
-      if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir);
+      // 2. طلب الـ API (تأكد أن الرابط شغال)
+      const upscaleApi = `https://mahbub-ullash.cyberbot.top/api/4k?imageUrl=${encodeURIComponent(imageUrl)}&size=high`;
+      const res = await axios.get(upscaleApi);
 
-      const imgPath = path.join(
-        cacheDir,
-        `4k_${Date.now()}.jpg`
-      );
+      if (res.data && res.data.success && res.data.result) {
+        const upscaledUrl = res.data.result;
+        
+        // تجهيز مسار الكاش
+        const cacheDir = path.join(__dirname, "cache");
+        if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir);
+        
+        const tempPath = path.join(cacheDir, `upscale_${Date.now()}.png`);
 
-      const imgRes = await axios.get(imageUrl, {
-        responseType: "stream",
-        timeout: 20000
-      });
+        // 3. تحميل الصورة الناتجة
+        const imageRes = await axios.get(upscaledUrl, { responseType: "stream" });
+        const writer = fs.createWriteStream(tempPath);
+        imageRes.data.pipe(writer);
 
-      await new Promise((resolve, reject) => {
-        const writer = fs.createWriteStream(imgPath);
-        imgRes.data.pipe(writer);
-        writer.on("finish", resolve);
-        writer.on("error", reject);
-      });
+        writer.on("finish", () => {
+          api.sendMessage({
+            body: "✅ تمت العملية بنجاح! إليك صورتك بجودة 4K:",
+            attachment: fs.createReadStream(tempPath)
+          }, threadID, () => {
+            // حذف الملف من الكاش بعد الإرسال
+            if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+          }, messageID);
+        });
 
-      const { data } = await axios.get(
-        "https://raw.githubusercontent.com/Arafat-Core/Arafat-Temp/refs/heads/main/4k.json",
-        { timeout: 10000 }
-      );
+        writer.on("error", (err) => {
+          console.error(err);
+          api.sendMessage("❌ وقع مشكل أثناء معالجة الصورة.", threadID, messageID);
+        });
 
-      const API_BASE = data.api;
-
-      const form = new FormData();
-      form.append("image", fs.createReadStream(imgPath));
-
-      const apiRes = await axios.post(
-        `${API_BASE}/Arafat-4k`,
-        form,
-        {
-          headers: form.getHeaders(),
-          timeout: 60000
-        }
-      );
-
-      if (fs.existsSync(imgPath)) fs.unlinkSync(imgPath);
-
-      if (!apiRes.data || !apiRes.data.photo_4k_url) {
-        return message.reply("❌ Failed to generate 4K image");
+      } else {
+        api.sendMessage("❌ فشل الـ API في تحويل الصورة، جرب مرة أخرى لاحقاً.", threadID, messageID);
       }
-
-      const timeTaken = ((Date.now() - startTime) / 1000).toFixed(2);
-
-      return message.reply({
-        body:
-          "✨ 𝟒𝐊 𝐈𝐦𝐚𝐠𝐞 𝐆𝐞𝐧𝐞𝐫𝐚𝐭𝐞𝐝\n" +
-          `🚀 𝐓𝐢𝐦𝐞 : ${timeTaken}s`,
-        attachment: await axios
-          .get(apiRes.data.photo_4k_url, {
-            responseType: "stream",
-            timeout: 30000
-          })
-          .then(r => r.data)
-      });
 
     } catch (err) {
       console.error(err);
-      return message.reply(
-        "❌ Server error. Please try again later."
-      );
+      api.sendMessage(`⚠️ خطأ في النظام: ${err.message}`, threadID, messageID);
     }
   }
 };
