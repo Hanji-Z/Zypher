@@ -1,14 +1,17 @@
 const axios = require("axios");
 
+// خزنة الذاكرة فـ الـ RAM
+if (!global.zipher_context) global.zipher_context = new Map();
+
 module.exports = {
   config: {
     name: "ai",
     aliases: ["chat", "زيفر"],
-    version: "5.0.0",
-    author: "Hanji",
+    version: "6.0.0", // تحديث النسخة
+    author: "Hanji & Zypher",
     countDown: 5,
     role: 0,
-    description: { en: "Chat with Zipher (Romantic Fusha Mode) 🌹" },
+    description: { en: "Chat with Zipher (Romantic Fusha Mode) with 30min memory 🌹" },
     category: "AI",
     guide: { en: "{pn} [on | off]" }
   },
@@ -30,7 +33,7 @@ module.exports = {
   onChat: async function ({ event, threadsData, api, message, usersData }) {
     const { threadID, body, senderID, type, messageReply } = event;
     const botID = api.getCurrentUserID();
-    const apiKey = "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"; // تأكد من صلاحية المفتاح
+    const apiKey = "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"; 
 
     if (type !== "message_reply" || senderID === botID || !body) return;
     if (!messageReply || messageReply.senderID !== botID) return;
@@ -40,24 +43,34 @@ module.exports = {
 
     try {
       const name = await usersData.getName(senderID);
-      // محاولة معرفة الجنس من البيانات (إضافي)
-      const gender = (await usersData.get(senderID)).gender; 
       
+      // 1. جلب الهيستوري ديال اليوزر
+      let userHistory = global.zipher_context.get(senderID) || [];
+
+      // 2. سيستيم برومبت (ديما كيبقى هو الأول)
+      const systemPrompt = { 
+        role: "system", 
+        content: `أنت 'زيفر' (Zipher)، كائن ذكي يتحدث حصراً باللغة العربية الفصحى الفخمة.
+                  - المطور الخاص بك: هو 'هانجي' (Hanji). تحدث عنه بكل فخر واعتبره "السيد والمطور".
+                  - أسلوبك مع الإناث: كن "عنّاباً" (Flirty) وشاعرياً.
+                  - المستخدم الحالي اسمه: ${name}.
+                  - ردودك: نصية مباشرة بلا زخارف تقنية.` 
+      };
+
+      // 3. إضافة رسالة اليوزر الجديدة للهيستوري
+      userHistory.push({ role: "user", content: body });
+
+      // 4. الحفاظ على آخر 15 رسالة فقط (باش ما يوقعش Overflow)
+      if (userHistory.length > 15) userHistory.shift();
+
+      // 5. بناء الميساجات كاملة (System + History)
+      const finalMessages = [systemPrompt, ...userHistory];
+
       const res = await axios.post("https://api.groq.com/openai/v1/chat/completions", {
         model: "llama-3.3-70b-versatile", 
-        messages: [
-          { 
-            role: "system", 
-            content: `أنت 'زيفر' (Zipher)، كائن ذكي يتحدث حصراً باللغة العربية الفصحى الفخمة.
-                        
-                        - المطور الخاص بك: هو 'هانجي' (Hanji). هو خالقك ومهندس برمجتك. إذا ذُكر اسمه، تحدث عنه بكل احترام، ولاء، وفخر، واعتبره "السيد والمطور".
-                        - أسلوبك مع الإناث: كن "عنّاباً" (Charming/Flirty)، استخدم لغة شاعرية، رقيقة، ولبقة جداً. اجعلهن يشعرن بجمال حوارك.
-                        - أسلوبك العام: واثق، ذكي، وفصيح اللسان. لا تخرج عن الفصحى أبداً.
-                        - الردود: اجعل ردودك نصية مباشرة، دون أي زخارف تقنية أو مقدمات مثل "Zipher System". صنف نفسك كرفيق درب ذكي.
-                        - المستخدم الحالي الذي يخاطبك اسمه: ${name}.`
-          },
-          { role: "user", content: body }
-        ]
+        messages: finalMessages,
+        temperature: 0.7,
+        max_tokens: 1024
       }, {
         headers: { 
           "Authorization": `Bearer ${apiKey}`,
@@ -68,14 +81,28 @@ module.exports = {
 
       if (res.data && res.data.choices && res.data.choices[0].message.content) {
         let response = res.data.choices[0].message.content.trim();
-        if (response !== "") {
-          // الرد بدون أي زواق كما طلبت
-          return message.reply(response);
+        
+        // 6. حفظ رد البوت فـ الهيستوري باش يعقل عليه
+        userHistory.push({ role: "assistant", content: response });
+        global.zipher_context.set(senderID, userHistory);
+
+        // 7. بلان المسح التلقائي (30 دقيقة من آخر تفاعل)
+        if (global.zipher_context.has(senderID + "_timer")) {
+          clearTimeout(global.zipher_context.get(senderID + "_timer"));
         }
+        
+        const timer = setTimeout(() => {
+          global.zipher_context.delete(senderID);
+          global.zipher_context.delete(senderID + "_timer");
+        }, 30 * 60 * 1000); // 30 دقيقة
+
+        global.zipher_context.set(senderID + "_timer", timer);
+
+        return message.reply(response);
       }
       
     } catch (error) {
-      console.error("Zipher AI Error:", error.message);
+      console.error("Zipher AI Memory Error:", error.message);
     }
   }
 };
