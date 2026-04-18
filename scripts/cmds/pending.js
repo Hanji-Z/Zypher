@@ -1,17 +1,15 @@
 const axios = require("axios");
-const fs = require("fs");
 
 module.exports = {
   config: {
     name: "pending",
     aliases: ["pen", "pend", "pe"],
-    version: "1.6.9",
-    author: "♡ Nazrul ♡",
+    version: "2.0.0",
+    author: "Hanji",
     countDown: 5,
-    role: 1,
-    shortDescription: "handle pending requests",
-    longDescription: "Approve orreject pending users or group requests",
-    category: "utility",
+    role: 1, // مشرفي البوت
+    shortDescription: { en: "Manage pending group requests" },
+    category: "SYSTEM",
   },
 
   onReply: async function ({ message, api, event, Reply }) {
@@ -19,85 +17,56 @@ module.exports = {
     if (String(event.senderID) !== String(author)) return;
 
     const { body, threadID } = event;
+    const sidebar = "​❯ ";
 
     if (body.trim().toLowerCase() === "c") {
       try {
         await api.unsendMessage(messageID);
-        return api.sendMessage(
-          ` Operation has been canceled!`,
-          threadID
-        );
-      } catch {
-        return;
-      }
+        return api.sendMessage(`[ 𝗭𝗬𝗣𝗛𝗘𝗥 𝗦𝗬𝗦𝗧𝗘𝗠 - 𝗔𝗕𝗢𝗥𝗧 ]\n╼━━━━━━━━━━━━╾\n${sidebar}تم إلغاء العملية بنجاح!`, threadID);
+      } catch { return; }
     }
 
     const indexes = body.split(/\s+/).map(Number);
-
-    if (isNaN(indexes[0])) {
-      return api.sendMessage(`⚠ Invalid input! Please try again.`, threadID);
-    }
+    if (isNaN(indexes[0])) return api.sendMessage(`⚠️ الرقم اللي دخلتي ماشي هو هاداك أ هانجي!`, threadID);
 
     let count = 0;
-
     for (const idx of indexes) {
- 
       if (idx <= 0 || idx > pending.length) continue;
-
       const group = pending[idx - 1];
 
       try {
         await api.sendMessage(
-          `✅ Group has been Successfully Approved by ShAn!\n\n📜 Type ${global.GoatBot.config.prefix}help to See Cmds!`,
+          `[ 𝗭𝗬𝗣𝗛𝗘𝗥 𝗦𝗬𝗦𝗧𝗘𝗠 - 𝗔𝗖𝗖𝗘𝗦𝗦 ]\n╼━━━━━━━━━━━━╾\n${sidebar}تمت الموافقة على الڭروب بنجاح!\n${sidebar}استخدم ${global.GoatBot.config.prefix}help للبدء.`,
           group.threadID
         );
 
         await api.changeNickname(
-          `${global.GoatBot.config.nickNameBot || "—「BOT"}`,
+          `${global.GoatBot.config.nickNameBot || "—「𝗭𝗬𝗣𝗛𝗘𝗥 𝗕𝗢𝗧」"}`,
           group.threadID,
           api.getCurrentUserID()
         );
-
         count++;
-      } catch {
-  
-        count++;
-      }
-    }
-
-    for (const idx of indexes.sort((a, b) => b - a)) {
-      if (idx > 0 && idx <= pending.length) {
-        pending.splice(idx - 1, 1);
-      }
+      } catch { count++; }
     }
 
     return api.sendMessage(
-      `✅ | [ Successfully ] 🎉 Approved ${count} Groups✨!`,
+      `[ 𝗭𝗬𝗣𝗛𝗘𝗥 𝗦𝗬𝗦𝗧𝗘𝗠 - 𝗗𝗢𝗡𝗘 ]\n╼━━━━━━━━━━━━╾\n${sidebar}تم تفعيل ${count} ڭروبات جديدة بنجاح! ✅`,
       threadID
     );
   },
 
   onStart: async function ({ api, event, args, usersData }) {
     const { threadID, messageID } = event;
+    const sidebar = "​❯ ";
     const adminBot = global.GoatBot.config.adminBot;
 
     if (!adminBot.includes(event.senderID)) {
-      return api.sendMessage(
-        `⚠ you have no permission to use this command!`,
-        threadID
-      );
+      return api.sendMessage(`⚠️ ماعندكش الصلاحية لخدمة هاد السيستيم!`, threadID);
     }
 
     const type = args[0]?.toLowerCase();
-    if (!type) {
-      return api.sendMessage(
-        `Usage: pending [user/thread/all]`,
-        threadID
-      );
-    }
+    if (!type) return api.sendMessage(`[ 𝗭𝗬𝗣𝗛𝗘𝗥 - 𝗜𝗡𝗙𝗢 ]\n╼━━━━━━━━━━━━╾\n${sidebar}استعمل: .pending [user/thread/all]`, threadID);
 
-    let msg = "",
-      index = 1;
     try {
       const spam = (await api.getThreadList(100, null, ["OTHER"])) || [];
       const pending = (await api.getThreadList(100, null, ["PENDING"])) || [];
@@ -105,24 +74,19 @@ module.exports = {
 
       let filteredList = [];
       if (type.startsWith("u")) filteredList = list.filter((t) => !t.isGroup);
-      if (type.startsWith("t")) filteredList = list.filter((t) => t.isGroup);
-      if (type === "all") filteredList = list;
+      else if (type.startsWith("t")) filteredList = list.filter((t) => t.isGroup);
+      else if (type === "all") filteredList = list;
 
-      for (const single of filteredList) {
-        const name =
-          single.name || (await usersData.getName(single.threadID)) || "Unknown";
+      if (filteredList.length === 0) return api.sendMessage(`[ 𝗭𝗬𝗣𝗛𝗘𝗥 ]\n╼━━━━━━━━━━━━╾\n${sidebar}قاعة الانتظار خاوية حالياً! ☕`, threadID);
 
-        msg += `[ ${index} ]  ${name}\n`;
-        index++;
+      let msg = "";
+      for (let i = 0; i < filteredList.length; i++) {
+        const name = filteredList[i].name || (await usersData.getName(filteredList[i].threadID)) || "Unknown";
+        msg += `${sidebar}[ ${i + 1} ] : ${name}\n`;
       }
 
-      msg += `🦋 —「𝐇︭𝐚︭𝐧︭'𝐣︭︭𝐢︭ ː͢» ⸙ 漢 .𖤍️️️️️️️️️️️️️️️️️️️️️️️️️️️️️️️️️️️️️️️️️️️️️️️️ please Reply with the correct group number to approve!\n`;
-      msg += `✨ Reply with "c" to Cancel.\n`;
-
       return api.sendMessage(
-        `✨ | [ Pending Groups & Users ${type
-          .charAt(0)
-          .toUpperCase()}${type.slice(1)} List ✨ ]\n\n${msg}`,
+        `[ 𝗭𝗬𝗣𝗛𝗘𝗥 𝗦𝗬𝗦𝗧𝗘𝗠 - 𝗣𝗘𝗡𝗗𝗜𝗡𝗚 ]\n╼━━━━━━━━━━━━━━━━━━━━╾\n${msg}╼━━━━━━━━━━━━━━━━━━━━╾\n${sidebar}جاوب برقم الڭروب باش تقبلو.\n${sidebar}صيفط "c" للإلغاء.`,
         threadID,
         (error, info) => {
           global.GoatBot.onReply.set(info.messageID, {
@@ -135,10 +99,8 @@ module.exports = {
         messageID
       );
     } catch (error) {
-      return api.sendMessage(
-        `⚠ Failed to retrieve pending list. Please try again later.`,
-        threadID
-      );
+      return api.sendMessage(`⚠️ فشل جلب طلبات الانتظار. جرب شوية آخر.`, threadID);
     }
   },
 };
+
