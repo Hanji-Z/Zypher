@@ -33,7 +33,7 @@ module.exports = {
   onChat: async function ({ event, threadsData, api, message, usersData }) {
     const { threadID, body, senderID, type, messageReply } = event;
     const botID = api.getCurrentUserID();
-    const apiKey = "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"; 
+    const apiKey = "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"; 
 
     if (type !== "message_reply" || senderID === botID || !body) return;
     if (!messageReply || messageReply.senderID !== botID) return;
