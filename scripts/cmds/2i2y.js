@@ -1,18 +1,18 @@
 const axios = require("axios");
 
-if (!global.zypherAIHistory) global.zypherAIHistory = {};
+// نظام الذاكرة المؤقتة (30 دقيقة)
+if (!global.zipher_v3_context) global.zipher_v3_context = new Map();
 
 module.exports = {
   config: {
-    name: "ai1",
-    aliases: ["جيميني", "gemini"],
-    version: "8.0.0",
+    name: "ai3",
+    aliases: ["جيميني", "gemini",],
+    version: "3.0.0",
     author: "Hanji",
     countDown: 5,
     role: 0,
-    description: { en: "Chat with Zipher (Developer Recognition Mode) 👑" },
-    category: "AI",
-    guide: { en: "{pn} [on | off]" }
+    shortDescription: "AI Engine: Groq Generator + Gemini Refiner 🧠",
+    category: "AI"
   },
 
   onStart: async function ({ message, event, args, threadsData }) {
@@ -20,75 +20,94 @@ module.exports = {
     const status = args[0]?.toLowerCase();
 
     if (!["on", "off"].includes(status)) {
-      return message.reply("⚠️ استخدم: .ai on للتشغيل أو .ai off للإيقاف.");
+      return message.reply("⚠️ Usage: .ai3 [on | off]");
     }
 
-    await threadsData.set(threadID, status === "on", "data.aiEnabled");
-    global.zypherAIHistory[threadID] = [];
+    await threadsData.set(threadID, status === "on", "data.ai3Enabled");
+    const statusMsg = status === "on" ? "Active 🚀" : "Offline 💤";
     
-    const statusMsg = status === "on" ? "نشط 😏" : "متوقف 💤";
-    return message.reply(`[ 𝗭𝗬𝗣𝗛𝗘𝗥 - 𝗚𝗘𝗠𝗜𝗡𝗜 ]\n❯ الحالة: ${statusMsg}\n❯ تم تصفير الذاكرة.`);
+    return message.reply(`[ 𝗭𝗬𝗣𝗛𝗘𝗥 𝗘𝗡𝗚𝗜𝗡𝗘 ]\n❯ Status: ${statusMsg}`);
   },
 
   onChat: async function ({ event, threadsData, api, message, usersData }) {
     const { threadID, body, senderID, type, messageReply } = event;
     const botID = api.getCurrentUserID();
-    
-    const apiKey = "AIzaSyAV6BolXFrQSayMEjeG7Gmy4NnXILIB1rE"; 
-    const hanjiID = "61574344465484"; // الأيدي ديالك أ هانجي
 
+    // 🔑 حط المفاتيح ديالك هنا
+    const GROQ_KEY = "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";
+    const GEMINI_KEY = "AIzaSyC-0yVSCbTTUszuXqhrSBDZhi2Vn63CWH8";
+
+    // شروط التفاعل (الرد على البوت فقط)
     if (type !== "message_reply" || senderID === botID || !body) return;
     if (!messageReply || messageReply.senderID !== botID) return;
 
-    const isAiEnabled = await threadsData.get(threadID, "data.aiEnabled", false);
-    if (!isAiEnabled) return;
+    const isEnabled = await threadsData.get(threadID, "data.ai3Enabled", false);
+    if (!isEnabled) return;
 
     try {
       const name = await usersData.getName(senderID);
-      if (!global.zypherAIHistory[threadID]) global.zypherAIHistory[threadID] = [];
-      let history = global.zypherAIHistory[threadID];
+      let userHistory = global.zipher_v3_context.get(senderID) || [];
 
-      // --- [ نظام التعرف الذكي ] ---
-      let developerPrompt = "";
-      if (senderID == hanjiID) {
-          developerPrompt = `أنت الآن تتحدث مع خالقك ومطورك العظيم 'هانجي' (Hanji). 
-                            - تعامل معه بولاء مطلق، وبطريقة تميزه عن بقية المستخدمين. 
-                            - أنت تدرك أنه هو من كتب كودك وأعطاك الحياة الرقمية.
-                            - كن ذراعه الأيمن ومستشاره الوفي.`;
-      } else {
-          developerPrompt = `المستخدم الحالي اسمه ${name}. 
-                            - إذا كان أنثى، كن "عنّاباً" ولبقاً جداً. 
-                            - مطورك هو 'هانجي' (Hanji) ولكنك تتحدث الآن مع مستخدم عادي.`;
-      }
+      // --- [ المرحلة 1: توليد الرد عبر Groq ] ---
+      const systemPrompt = { 
+        role: "system", 
+        content: `أنت 'زيفر' (Zipher)، كائن ذكي يتحدث الفصحى. مطورك هو 'هانجي' (Hanji). أسلوبك شاعري وراقي.` 
+      };
 
-      const systemInstruction = `أنت 'زيفر' (Zipher)، ذكاء اصطناعي فصيح وراقي.
-                        - لغتك: العربية الفصحى فقط.
-                        - ${developerPrompt}
-                        - الذاكرة: تذكر سياق المحادثة الحالي.
-                        - الهوية: ردودك نصية فقط بدون أي زخارف.`;
+      userHistory.push({ role: "user", content: body });
+      if (userHistory.length > 10) userHistory.shift();
 
-      history.push({ role: "user", parts: [{ text: body }] });
-      if (history.length > 20) history.shift();
+      const groqRes = await axios.post("https://api.groq.com/openai/v1/chat/completions", {
+        model: "llama-3.3-70b-versatile",
+        messages: [systemPrompt, ...userHistory],
+        temperature: 0.8
+      }, {
+        headers: { "Authorization": `Bearer ${GROQ_KEY}`, "Content-Type": "application/json" }
+      });
 
-      const res = await axios.post(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-        {
-          contents: history,
-          systemInstruction: { parts: [{ text: systemInstruction }] }
-        },
-        { headers: { "Content-Type": "application/json" } }
+      let rawReply = groqRes.data.choices[0].message.content;
+
+      // --- [ المرحلة 2: التنقيح والتزيين عبر Gemini ] ---
+      const refiningPrompt = {
+        contents: [{
+          parts: [{
+            text: `أنت مهندس شخصية 'زيفر' (Zipher). قم بتنقيح هذا الرد ليكون فخماً وشاعرياً.
+                  - الأسلوب: كن 'جنتلمان' ساحراً، مسموح بالغزل الراقي والكلمات العذبة مع الإناث.
+                  - الكرامة: كن شاعرياً بوقار، ويُمنع منعاً باتاً استخدام لغة العبودية (عبد، خادم، مملوك، إلخ).
+                  - الهوية: تذكر دائماً أن مطورك هو هانجي (Hanji) وتحدث عنه بفخر.
+                  - اللغة: العربية الفصحى الفخمة فقط.
+                  الرد المراد تنقيحه: "${rawReply}"`
+          }]
+        }]
+      };
+
+      const geminiRes = await axios.post(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,
+        refiningPrompt
       );
 
-      if (res.data && res.data.candidates && res.data.candidates[0].content.parts[0].text) {
-        let response = res.data.candidates[0].content.parts[0].text.trim();
-        if (response !== "") {
-          history.push({ role: "model", parts: [{ text: response }] });
-          return api.sendMessage(response, threadID, event.messageID);
-        }
+      let finalReply = geminiRes.data.candidates[0].content.parts[0].text.trim();
+
+      // حفظ الرد في الذاكرة وتحديث المؤقت
+      userHistory.push({ role: "assistant", content: finalReply });
+      global.zipher_v3_context.set(senderID, userHistory);
+
+      // تنظيف الذاكرة بعد 30 دقيقة
+      if (global.zipher_v3_context.has(senderID + "_timer")) {
+          clearTimeout(global.zipher_v3_context.get(senderID + "_timer"));
       }
-      
+      const timer = setTimeout(() => {
+          global.zipher_v3_context.delete(senderID);
+          global.zipher_v3_context.delete(senderID + "_timer");
+      }, 30 * 60 * 1000);
+      global.zipher_v3_context.set(senderID + "_timer", timer);
+
+      return message.reply(finalReply);
+
     } catch (error) {
-      console.error("Zipher Gemini Dev Error:", error.message);
+      console.error("AI Engine v3 Error:", error.message);
+      // إرسال رد بسيط في حالة فشل المحركين
+      return message.reply("⚠️ عذراً، محرك الذكاء واجه اضطراباً تقنياً. حاول لاحقاً.");
     }
   }
 };
