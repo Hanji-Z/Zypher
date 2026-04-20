@@ -3,9 +3,10 @@ const path = require("path");
 const { createCanvas, loadImage } = require("canvas");
 
 const root = process.cwd();
-// 🚩 حط سمية التصويرة الجديدة هنا (خاص تكون فـ cache)
+// 🚩 هنا السمية صحيحة حيت وسط المعقوفات
 const templateName = "shoha.jpg"; 
-const templatePath = path.join(root, "scripts", "cmds", "cache", shoha.jpg);
+// ✅ هنا استعملنا templateName اللي ديجا معرفة
+const templatePath = path.join(root, "scripts", "cmds", "cache", templateName);
 
 module.exports.config = {
   name: "shoha",
@@ -20,7 +21,6 @@ module.exports.config = {
 module.exports.onStart = async ({ event, api, usersData, message }) => {
   const { threadID, messageID, senderID, messageReply } = event;
   
-  // 🛡️ ليستا ديال الأيديات ديالك (زيد شحال ما بغيتي)
   const adminIDs = [
     "61574764452026", 
     "61578798203236", 
@@ -32,7 +32,6 @@ module.exports.onStart = async ({ event, api, usersData, message }) => {
   try {
     const targetID = messageReply.senderID;
 
-    // 🛡️ نظام الحماية المتعدد
     if (adminIDs.includes(targetID) && !adminIDs.includes(senderID)) {
         api.setMessageReaction("❌", messageID, () => {}, true);
         return message.reply("𝐘𝐨𝐮 𝐝𝐨𝐧'𝐭 𝐡𝐚𝐯𝐞 𝐩𝐞𝐫𝐦𝐢𝐬𝐬𝐢𝐨𝐧 😥");
@@ -59,9 +58,6 @@ module.exports.onStart = async ({ event, api, usersData, message }) => {
     const av1 = await loadImage(avatarURL1);
     const av2 = await loadImage(avatarURL2);
 
-    // ==========================================
-    // 1️⃣ رسم صورة "المرأة" (بدّل الإحداثيات هنا)
-    // ==========================================
     const x1_av = 562, y1_av = 744, r1 = 100; 
     ctx.save();
     ctx.beginPath();
@@ -73,9 +69,6 @@ module.exports.onStart = async ({ event, api, usersData, message }) => {
     ctx.lineWidth = 5;
     ctx.stroke();
 
-    // ==========================================
-    // 2️⃣ رسم صورة "الرجل/أنت" (بدّل الإحداثيات هنا)
-    // ==========================================
     const x2_av = 1208, y2_av = 389, r2 = 121;
     ctx.save();
     ctx.beginPath();
