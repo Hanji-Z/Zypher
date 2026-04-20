@@ -10,7 +10,7 @@ module.exports.config = {
   version: "8.5.0",
   role: 0,
   author: "myhe & Hanji", 
-  description: "تطقيم مع حماية خاصة للمالك هانجي",
+  description: "تطقيم مع9 حماية خاصة للمالك هانجي",
   category: "Fun",
   cooldowns: 7
 };
