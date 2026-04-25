@@ -35,7 +35,7 @@ module.exports = {
     const botID = api.getCurrentUserID();
     
     // ساروت Groq ديالك
-    const apiKey = "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"; 
+    const apiKey = "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"; 
 
     if (type !== "message_reply" || senderID === botID || !body) return;
     if (!messageReply || messageReply.senderID !== botID) return;
