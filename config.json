@@ -1,7 +1,7 @@
 {
 	"facebookAccount": {
-		"email": "",
-		"password": "",
+		"email": "hanjis@atomicmail.io",
+		"password": "Hanji6776h",
 		"2FASecret": "",
 		"i_user": "",
 		"proxy": null,
@@ -19,13 +19,13 @@
 		"ignoreCommand": []
 	},
 	"adminBot": [
-		"61571363803848",
-		"61567588014166",
+		"100081540530861",
+		"61567390241343",
 		"61578798203236",
 		"100081540530861"
 	],
 	"owner": [
-		"61578798203236",
+		"61567390241343",
 		"100081540530861"
 	],
 	"whiteListMode": {
