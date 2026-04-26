@@ -7,7 +7,7 @@ module.exports = {
   config: {
     name: "song1",
     aliases: ["0", "غني"],
-    version: "3.6.0",
+    version: "3.8.0",
     author: "Hanji",
     countDown: 10,
     role: 0,
@@ -22,7 +22,7 @@ module.exports = {
 
     if (!songName) {
         api.setMessageReaction("⚠️", messageID, () => {}, true);
-        return;
+        return message.reply("عطيني سمية الأغنية أ هانجي!");
     }
 
     api.setMessageReaction("🔍", messageID, () => {}, true);
@@ -33,35 +33,44 @@ module.exports = {
 
       if (!video) {
         api.setMessageReaction("❌", messageID, () => {}, true);
-        return;
+        return message.reply("مالقيت والو، تأكد من السمية.");
       }
 
       api.setMessageReaction("📥", messageID, () => {}, true);
 
-      const filePath = path.join(__dirname, "cache", `${Date.now()}.mp3`);
-      if (!fs.existsSync(path.join(__dirname, "cache"))) fs.mkdirSync(path.join(__dirname, "cache"));
+      const cachePath = path.join(__dirname, "cache");
+      if (!fs.existsSync(cachePath)) fs.mkdirSync(cachePath);
+      const filePath = path.join(cachePath, `${Date.now()}.mp3`);
 
-      // 🍪 New Agent Logic (The Secret Sauce)
-      const cookiePath = path.join(process.cwd(), "cookies.json"); // تأكد من اسم الملف عندك
-      let options = {
-        filter: "audioonly",
-        quality: "highestaudio",
-        highWaterMark: 1 << 25
-      };
-
+      // 🍪 Agent Configuration
+      const cookiePath = path.join(process.cwd(), "cookies.json");
+      let agent;
       if (fs.existsSync(cookiePath)) {
         try {
           const jsonCookies = JSON.parse(fs.readFileSync(cookiePath, "utf-8"));
-          // هادي هي اللعيبة لي كتحل المشكل
-          options.agent = ytdl.createAgent(jsonCookies);
+          agent = ytdl.createAgent(jsonCookies);
         } catch (e) {
-          console.error("[ ZYPHER ] Cookie/Agent Error:", e.message);
+          console.error("[ ZYPHER ] Cookie Error:", e.message);
         }
       }
 
+      // 🛠️ Simple & Stable Options
+      const options = {
+        agent,
+        filter: 'audioonly',
+        highWaterMark: 1 << 25
+      };
+
       const stream = ytdl(video.url, options);
       const writer = fs.createWriteStream(filePath);
+      
       stream.pipe(writer);
+
+      stream.on('error', (err) => {
+        console.error("[ YTDL ERROR ]", err);
+        api.setMessageReaction("❌", messageID, () => {}, true);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      });
 
       writer.on('finish', () => {
         api.setMessageReaction("✅", messageID, () => {}, true);
@@ -74,7 +83,7 @@ module.exports = {
 ​╼━━━━━━━━━━━━━━━━━━━━╾
 [ 𝗔𝗖𝗖𝗘𝗦𝗦 𝗚𝗥𝗔𝗡𝗧𝗘𝗗 - 𝗛𝗔𝗡𝗝𝗜 ]`;
 
-        return message.reply({
+        message.reply({
           body: decorativeMsg,
           attachment: fs.createReadStream(filePath)
         }, () => {
@@ -82,14 +91,8 @@ module.exports = {
         });
       });
 
-      stream.on('error', (err) => {
-        console.error("[ ZYPHER ERROR ]", err);
-        api.setMessageReaction("❌", messageID, () => {}, true);
-        message.reply("تعذر تحميل الأغنية، جرب مرة أخرى لاحقاً.");
-      });
-
     } catch (error) {
-      console.error(error);
+      console.error("[ ZYPHER CRITICAL ERROR ]", error);
       api.setMessageReaction("⚠️", messageID, () => {}, true);
     }
   }
