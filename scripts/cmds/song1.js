@@ -1,4 +1,4 @@
-Enterconst fs = require("fs-extra");
+const fs = require("fs-extra");
 const path = require("path");
 const yts = require("yt-search");
 const ytdl = require("@distube/ytdl-core");
