@@ -7,7 +7,7 @@ module.exports = {
   config: {
     name: "song1",
     aliases: ["0", "غني"],
-    version: "3.5.0",
+    version: "3.6.0",
     author: "Hanji",
     countDown: 10,
     role: 0,
@@ -25,7 +25,6 @@ module.exports = {
         return;
     }
 
-    // 🔍 Search Reaction
     api.setMessageReaction("🔍", messageID, () => {}, true);
 
     try {
@@ -37,35 +36,34 @@ module.exports = {
         return;
       }
 
-      // 📥 Downloading Reaction
       api.setMessageReaction("📥", messageID, () => {}, true);
 
       const filePath = path.join(__dirname, "cache", `${Date.now()}.mp3`);
-      
-      // 🍪 Cookie Configuration
-      const cookiePath = path.join(process.cwd(), "youtube_cookies.json");
+      if (!fs.existsSync(path.join(__dirname, "cache"))) fs.mkdirSync(path.join(__dirname, "cache"));
+
+      // 🍪 New Agent Logic (The Secret Sauce)
+      const cookiePath = path.join(process.cwd(), "cookies.json"); // تأكد من اسم الملف عندك
       let options = {
         filter: "audioonly",
         quality: "highestaudio",
+        highWaterMark: 1 << 25
       };
 
       if (fs.existsSync(cookiePath)) {
         try {
           const jsonCookies = JSON.parse(fs.readFileSync(cookiePath, "utf-8"));
-          const cookieString = jsonCookies.map(c => `${c.name}=${c.value}`).join('; ');
-          options.requestOptions = { headers: { cookie: cookieString } };
+          // هادي هي اللعيبة لي كتحل المشكل
+          options.agent = ytdl.createAgent(jsonCookies);
         } catch (e) {
-          console.error("[ ZYPHER ] Cookie Error:", e.message);
+          console.error("[ ZYPHER ] Cookie/Agent Error:", e.message);
         }
       }
 
-      // 🛠️ Download Process
       const stream = ytdl(video.url, options);
       const writer = fs.createWriteStream(filePath);
       stream.pipe(writer);
 
       writer.on('finish', () => {
-        // ✅ Success Reaction
         api.setMessageReaction("✅", messageID, () => {}, true);
         
         const decorativeMsg = `​[ 𝗭𝗬𝗣𝗛𝗘𝗥 𝗦𝗬𝗦𝗧𝗘𝗠 - 𝗠𝗨𝗦𝗜𝗖 ]
@@ -85,8 +83,9 @@ module.exports = {
       });
 
       stream.on('error', (err) => {
-        console.error(err);
+        console.error("[ ZYPHER ERROR ]", err);
         api.setMessageReaction("❌", messageID, () => {}, true);
+        message.reply("تعذر تحميل الأغنية، جرب مرة أخرى لاحقاً.");
       });
 
     } catch (error) {
