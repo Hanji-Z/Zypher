@@ -9,7 +9,7 @@
 },
 "dependencies": {
 "@google/generative-ai": "^0.21.0",
-"npm:@distube/ytdl-core@latest",
+"@distube/ytdl-core": "latest",
 "axios": "^1.4.0",
 "sagor-video-downloader": "latest",
 "yt-search": "^2.10.4",
