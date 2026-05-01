@@ -112,10 +112,10 @@ module.exports = {
     if (!args.length) {
       return message.reply(
         "🖼️ كيفاش تستعمل:\n" +
-        "  • pinterest <كلمة بحث>\n" +
-        "  • pinterest <كلمة بحث> <عدد>\n\n" +
+        "  • pin <كلمة بحث>\n" +
+        "  • pin <كلمة بحث> <عدد>\n\n" +
         "مثال:\n" +
-        "  • pinterest naruto 5\n" +
+        "  • pin naruto 5\n" +
         "  • pin cats 10"
       );
     }
@@ -172,7 +172,7 @@ module.exports = {
       await api.sendMessage(
         {
           body:
-            `🖼️ Pinterest — "${query}"\n` +
+            `🖼️ Pictures — "${query}"\n` +
             `📦 ${attachments.length}/${limit} صورة\n` +
             `⏱️ ${elapsed}s | 🔌 ${source}` +
             (failed > 0 ? `\n⚠️ ${failed} صورة ما تحملاتش` : ""),
