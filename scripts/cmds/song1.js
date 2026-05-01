@@ -53,6 +53,24 @@ function runCommand(bin, args) {
   });
 }
 
+function ytArgs(extra = []) {
+  return [
+    "--extractor-args", "youtube:player_client=android",
+    "--js-runtimes", `node:${process.execPath}`,
+    ...extra
+  ];
+}
+
+function friendlyError(err) {
+  const msg = err.message || "";
+  if (msg.includes("Sign in to confirm")) return "YouTube طلب تسجيل الدخول — عاود المحاولة بعد قليل.";
+  if (msg.includes("Video unavailable")) return "الفيديو غير متاح أو محذوف.";
+  if (msg.includes("Private video")) return "الفيديو خاص ولا يمكن تحميله.";
+  if (msg.includes("not found") || msg.includes("ما لقيت")) return "ما لقيت حتى نتيجة لهذا البحث.";
+  if (msg.includes("too large") || msg.includes("كبير")) return "الملف كبير بزاف — جرب أغنية أقصر.";
+  return "وقع مشكل في التحميل — عاود المحاولة أو جرب اسم آخر.";
+}
+
 function formatDuration(sec) {
   const m = Math.floor(sec / 60);
   const s = sec % 60;
@@ -97,7 +115,7 @@ module.exports = {
       const ytdlp = await getYtdlp();
 
       const jsonRaw = await runCommand(ytdlp, [
-        "--no-playlist", "--dump-json", searchTarget
+        "--no-playlist", "--dump-json", ...ytArgs(), searchTarget
       ]);
       const info = JSON.parse(jsonRaw);
 
@@ -119,6 +137,7 @@ module.exports = {
       await runCommand(ytdlp, [
         "--no-playlist",
         "-x", "--audio-format", "mp3", "--audio-quality", "5",
+        ...ytArgs(),
         "-o", filePath,
         videoUrl
       ]);
@@ -147,12 +166,9 @@ module.exports = {
       );
 
     } catch (err) {
-      console.error("Play Error:", err);
+      console.error("Play Error:", err.message?.substring(0, 300));
       api.setMessageReaction("❌", messageID, () => {}, true);
-      return message.reply(
-        `❌ ضرب مشكل:\n${err.message || "خطأ غير معروف"}\n\n` +
-        `💡 جرب اسم آخر أو رابط مباشر.`
-      );
+      return message.reply(`❌ ${friendlyError(err)}`);
     }
   }
 };
