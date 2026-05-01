@@ -1,76 +1,17 @@
-const { execFile } = require("child_process");
-const https = require("https");
-const http = require("http");
-const fs = require("fs-extra");
-const path = require("path");
-const os = require("os");
-
-const YTDLP_CACHE = path.join(os.tmpdir(), "yt-dlp-standalone");
-const YTDLP_URL = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux";
-const YTDLP_PATHS = [
-  "/home/runner/workspace/.pythonlibs/bin/yt-dlp",
-  "/usr/local/bin/yt-dlp",
-  "/usr/bin/yt-dlp",
-  YTDLP_CACHE
-];
-
-function downloadFile(url, dest, r = 0) {
-  if (r > 5) return Promise.reject(new Error("too many redirects"));
-  return new Promise((resolve, reject) => {
-    const client = url.startsWith("https") ? https : http;
-    client.get(url, res => {
-      if ([301, 302].includes(res.statusCode)) {
-        return downloadFile(res.headers.location, dest, r + 1).then(resolve).catch(reject);
-      }
-      const file = fs.createWriteStream(dest);
-      res.pipe(file);
-      file.on("finish", resolve);
-      file.on("error", reject);
-    }).on("error", reject);
-  });
-}
-
-async function getYtdlp() {
-  for (const p of YTDLP_PATHS) {
-    if (fs.existsSync(p)) {
-      try {
-        await new Promise((res, rej) => execFile(p, ["--version"], (e) => e ? rej(e) : res()));
-        return p;
-      } catch {}
-    }
-  }
-  await downloadFile(YTDLP_URL, YTDLP_CACHE);
-  fs.chmodSync(YTDLP_CACHE, "755");
-  return YTDLP_CACHE;
-}
-
-function runCommand(bin, args) {
-  return new Promise((resolve, reject) => {
-    execFile(bin, args, { maxBuffer: 1024 * 1024 * 50 }, (err, stdout, stderr) => {
-      if (err) return reject(new Error(stderr || err.message));
-      resolve(stdout.trim());
-    });
-  });
-}
-
-function ytArgs(extra = []) {
-  return [
-    "--extractor-args", "youtube:player_client=android",
-    "--js-runtimes", `node:${process.execPath}`,
-    ...extra
-  ];
-}
+const axios = require('axios');
+const fs = require('fs-extra');
+const path = require('path');
 
 module.exports = {
   config: {
     name: "song",
     aliases: ["music", "اغنية"],
-    version: "7.1.0",
+    version: "6.0.0",
     author: "Zypher",
-    countDown: 20,
+    countDown: 20, // حماية من البلوك والسبام
     role: 0,
     category: "MEDIA",
-    shortDescription: { en: "Download full song from YouTube" },
+    shortDescription: { en: "Download full audio with smart duration filter" },
     guide: { en: "{pn} [song name]" }
   },
 
@@ -82,57 +23,70 @@ module.exports = {
 
     if (!query) return;
 
+    // تفاعل بالانتظار
     api.setMessageReaction("⏳", messageID, () => {}, true);
 
     try {
-      const ytdlp = await getYtdlp();
+      // البحث في تيكتوك مع إضافة "full song" لضمان نتائج طويلة
+      const searchRes = await axios.get(`https://lyric-search-neon.vercel.app/kshitiz?keyword=${encodeURIComponent(query + " full song")}`, { timeout: 15000 });
+      const videos = searchRes.data;
 
-      const jsonRaw = await runCommand(ytdlp, [
-        "--no-playlist", "--dump-json", ...ytArgs(), `ytsearch1:${query}`
-      ]);
-      const info = JSON.parse(jsonRaw);
+      if (!videos || videos.length === 0) {
+        api.setMessageReaction("❌", messageID, () => {}, true);
+        return;
+      }
 
-      const title = info.title || query;
-      const channel = info.uploader || info.channel || "Unknown";
-      const durationSec = info.duration || 0;
+      // --- 🧠 الفلتر الذكي: البحث عن فيديو بين دقيقة و 4 دقائق ---
+      let selectedVideo = videos.find(v => v.duration && v.duration >= 60 && v.duration <= 240);
+
+      // إيلا مالقيناش، ناخدو أطول واحد فيهم
+      if (!selectedVideo) {
+        selectedVideo = videos.sort((a, b) => (b.duration || 0) - (a.duration || 0))[0];
+      }
+
+      const videoUrl = selectedVideo.videoUrl;
+      const durationSec = selectedVideo.duration || 0;
       const minutes = Math.floor(durationSec / 60);
       const seconds = durationSec % 60;
-      const durationStr = `${minutes}:${String(seconds).padStart(2, "0")}`;
-      const videoUrl = info.webpage_url || info.url;
 
-      const cachePath = path.join(__dirname, "cache");
-      fs.ensureDirSync(cachePath);
+      // تجهيز مكان التخزين المؤقت
+      const cachePath = path.join(__dirname, 'cache');
+      if (!fs.existsSync(cachePath)) fs.mkdirSync(cachePath);
+      
       const filePath = path.join(cachePath, `song_${Date.now()}.mp3`);
 
-      await runCommand(ytdlp, [
-        "--no-playlist",
-        "-x", "--audio-format", "mp3", "--audio-quality", "5",
-        ...ytArgs(),
-        "-o", filePath,
-        videoUrl
-      ]);
+      // تحميل الملف الصوتي
+      const response = await axios({
+        method: 'get',
+        url: videoUrl,
+        responseType: 'stream',
+        timeout: 30000 
+      });
 
-      if (!fs.existsSync(filePath)) throw new Error("الملف ما تحملش");
+      const writer = fs.createWriteStream(filePath);
+      response.data.pipe(writer);
 
-      const sizeMB = (fs.statSync(filePath).size / (1024 * 1024)).toFixed(2);
+      writer.on('finish', async () => {
+        // إرسال الأغنية
+        await api.sendMessage({
+          body: `[ 𝗭𝗬𝗣𝗛𝗘𝗥 - 𝗔𝗨𝗗𝗜𝗢 ]\n${line}\n${sidebar}❯ 🎵 **Track**: ${query}\n${sidebar}❯ ⏳ **Duration**: ${minutes}:${seconds < 10 ? '0' : ''}${seconds}\n${line}\n${sidebar}[ 𝗦𝗬𝗦𝗧𝗘𝗠 𝗢𝗣𝗘𝗥𝗔𝗧𝗜𝗢𝗡𝗔𝗟 ]`,
+          attachment: fs.createReadStream(filePath)
+        }, threadID, messageID);
 
-      await api.sendMessage({
-        body: `[ 𝗭𝗬𝗣𝗛𝗘𝗥 - 𝗔𝗨𝗗𝗜𝗢 ]\n${line}\n${sidebar}❯ 🎵 Track: ${title}\n${sidebar}❯ 👤 Channel: ${channel}\n${sidebar}❯ ⏳ Duration: ${durationStr}\n${sidebar}❯ 📦 Size: ${sizeMB} MB\n${line}\n${sidebar}[ 𝗦𝗬𝗦𝗧𝗘𝗠 𝗢𝗣𝗘𝗥𝗔𝗧𝗜𝗢𝗡𝗔𝗟 ]`,
-        attachment: fs.createReadStream(filePath)
-      }, threadID, messageID);
+        // تبديل الإيموجي لتم بنجاح
+        api.setMessageReaction("✅", messageID, () => {}, true);
+        
+        // مسح الملف مورا 5 ثواني باش السيرفر يبقى نقي
+        if (fs.existsSync(filePath)) {
+          setTimeout(() => fs.unlinkSync(filePath), 5000);
+        }
+      });
 
-      api.setMessageReaction("✅", messageID, () => {}, true);
-
-      setTimeout(() => { try { fs.unlinkSync(filePath); } catch {} }, 5000);
+      writer.on('error', (err) => { throw err; });
 
     } catch (e) {
-      console.error("Song Error:", e.message?.substring(0, 300));
+      console.error(e);
       api.setMessageReaction("❌", messageID, () => {}, true);
-      const msg = e.message || "";
-      const friendly = msg.includes("Sign in to confirm") ? "YouTube بلوك الطلب — عاود بعد قليل." :
-                       msg.includes("unavailable") ? "الأغنية غير متاحة." :
-                       "وقع مشكل — عاود المحاولة.";
-      api.sendMessage(`❌ ${friendly}`, threadID, messageID);
     }
   }
 };
