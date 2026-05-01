@@ -1,164 +1,127 @@
 const axios = require("axios");
 const fs = require("fs-extra");
 const path = require("path");
-const { promisify } = require("util");
-const stream = require("stream");
-const pipeline = promisify(stream.pipeline);
 
-// ═══════════════════════════════════════════════════
-// تحميل الصورة كـ Buffer من URL
-// ═══════════════════════════════════════════════════
-async function downloadBuffer(url) {
-  const res = await axios.get(url, {
-    responseType: "arraybuffer",
-    timeout: 20000,
-    headers: {
-      "User-Agent": "Mozilla/5.0",
-      "Referer": "https://www.facebook.com/"
-    }
-  });
-  return Buffer.from(res.data);
-}
+// سلسلة APIs — كنجرب واحد واحد، لطاح وحد يكمل الاخر
+async function upscaleImage(imageUrl) {
+  const enc = encodeURIComponent(imageUrl);
+  const cacheDir = path.join(__dirname, "cache");
+  fs.ensureDirSync(cacheDir);
+  const outPath = path.join(cacheDir, `4k_${Date.now()}.png`);
 
-// ═══════════════════════════════════════════════════
-// APIs للـ upscale — يجرب واحدة واحدة
-// ═══════════════════════════════════════════════════
-async function tryUpscaleAPIs(imageUrl) {
   const apis = [
-    // API 1: waifu2x (أفضل لـ anime/art)
-    async () => {
-      const res = await axios.get(
-        `https://api.waifu2x.anime4k.org/api?style=art&noise=1&scale=2&url=${encodeURIComponent(imageUrl)}`,
-        { timeout: 30000, responseType: "arraybuffer" }
-      );
-      if (res.headers["content-type"]?.includes("image")) return Buffer.from(res.data);
-      throw new Error("Not an image response");
+    // 1) mahbub API (الأصلي — لكان رجع يخدم)
+    {
+      name: "mahbub",
+      fetch: () => axios.get(
+        `https://mahbub-ullash.cyberbot.top/api/4k?imageUrl=${enc}&size=high`,
+        { timeout: 15000 }
+      ).then(r => {
+        if (!r.data?.success || !r.data?.result) throw new Error("no result");
+        return axios.get(r.data.result, { responseType: "arraybuffer", timeout: 15000 });
+      })
     },
-    // API 2: jigsawstack upscale (free tier)
-    async () => {
-      const res = await axios.post(
-        "https://api.jigsawstack.com/v1/ai/image_upscale",
-        { url: imageUrl, scale: 2 },
-        { timeout: 30000, responseType: "arraybuffer", headers: { "Content-Type": "application/json" } }
-      );
-      if (res.headers["content-type"]?.includes("image")) return Buffer.from(res.data);
-      throw new Error("Not an image response");
+
+    // 2) betadash (لكان رجع يخدم)
+    {
+      name: "betadash",
+      fetch: () => axios.get(
+        `https://betadash-api-swordslush-production.up.railway.app/upscale?url=${enc}`,
+        { timeout: 15000 }
+      ).then(r => {
+        const url = r.data?.result || r.data?.url || r.data?.image;
+        if (!url) throw new Error("no result");
+        return axios.get(url, { responseType: "arraybuffer", timeout: 15000 });
+      })
     },
+
+    // 3) waifu2x (خدام لبعض الصور)
+    {
+      name: "waifu2x",
+      fetch: () => axios.get(
+        `https://waifu2x.udp.jp/api?style=photo&noise=2&scale=2&url=${enc}`,
+        { responseType: "arraybuffer", timeout: 25000 }
+      ).then(r => {
+        if (!r.headers["content-type"]?.includes("image")) throw new Error("not image");
+        return r;
+      })
+    },
+
+    // 4) images.weserv.nl — دايماً خدام (bicubic 4K + sharpen)
+    {
+      name: "weserv",
+      fetch: () => axios.get(
+        `https://images.weserv.nl/?url=${enc}&w=3840&h=2160&fit=inside&sharp=5&q=100&output=png`,
+        { responseType: "arraybuffer", timeout: 20000 }
+      ).then(r => {
+        if (!r.headers["content-type"]?.includes("image")) throw new Error("not image");
+        return r;
+      })
+    }
   ];
 
-  for (const apiCall of apis) {
+  for (const api of apis) {
     try {
-      const buf = await apiCall();
-      if (buf && buf.length > 1000) return buf;
-    } catch {}
+      const res = await api.fetch();
+      const buffer = Buffer.from(res.data);
+      if (buffer.length < 1000) throw new Error("buffer too small");
+      fs.writeFileSync(outPath, buffer);
+      return { path: outPath, api: api.name };
+    } catch (e) {
+      console.log(`[4k] ${api.name} failed: ${e.message}`);
+    }
   }
-  return null;
-}
 
-// ═══════════════════════════════════════════════════
-// Upscale بـ jimp (محلي — بدون internet)
-// ═══════════════════════════════════════════════════
-async function upscaleWithJimp(imageBuffer, scale = 2) {
-  const Jimp = require("jimp");
-  const img = await Jimp.read(imageBuffer);
-  const newW = img.bitmap.width * scale;
-  const newH = img.bitmap.height * scale;
-  img.resize(newW, newH, Jimp.RESIZE_BICUBIC);
-  return await img.getBufferAsync(Jimp.MIME_JPEG);
+  throw new Error("كل الـ APIs فشلت");
 }
 
 module.exports = {
   config: {
     name: "4k",
-    aliases: ["upscale", "hd"],
     version: "2.0.0",
-    author: "Hanji (fixed)",
-    countDown: 10,
+    author: "Hanji",
+    countDown: 15,
     role: 0,
-    shortDescription: "رفع جودة الصورة (4K Upscale)",
-    longDescription: "رد على صورة لرفع جودتها — يجرب AI APIs أولاً، وإلا يستعمل bicubic scaling",
+    shortDescription: "تحسين جودة الصورة ورفع دقتها",
     category: "image",
-    guide: { en: "رد على صورة بـ .4k أو .upscale أو .hd" }
+    guide: { en: "رد على صورة بـ .4k" }
   },
 
-  onStart: async function ({ api, event, message }) {
+  onStart: async function ({ api, event }) {
     const { threadID, messageID, messageReply } = event;
 
+    if (
+      !messageReply ||
+      !messageReply.attachments ||
+      messageReply.attachments.length === 0 ||
+      messageReply.attachments[0].type !== "photo"
+    ) {
+      return api.sendMessage("⚠️ خاصك ترد على تصويرة باش يخدم الأمر!", threadID, messageID);
+    }
+
+    const imageUrl = messageReply.attachments[0].url;
+    api.setMessageReaction("⏳", messageID, () => {}, true);
+
     try {
-      // 1. التحقق من وجود صورة في الرسالة المردود عليها
-      const attach = messageReply?.attachments?.find(a => a.type === "photo" || a.type === "image");
-      if (!messageReply || !attach) {
-        return message.reply(
-          "⚠️ كيفاش تستعمل:\n" +
-          "  رد على صورة بـ .4k\n\n" +
-          "مثال: ارسل صورة ثم رد عليها بـ .4k"
-        );
-      }
+      const { path: outPath, api: usedApi } = await upscaleImage(imageUrl);
 
-      const imageUrl = attach.url || attach.previewUrl;
-      if (!imageUrl) return message.reply("❌ ما قدرتش نجيب رابط الصورة.");
-
-      api.setMessageReaction("⏳", messageID, () => {}, true);
-
-      const loadMsg = await api.sendMessage(
-        "🔍 يحاول يرفع الجودة...\n⏳ انتظر قليلاً",
-        threadID
-      );
-
-      const startTime = Date.now();
-      let resultBuffer = null;
-      let method = "";
-
-      // 2. جرب AI APIs أولاً
-      try {
-        resultBuffer = await tryUpscaleAPIs(imageUrl);
-        if (resultBuffer) method = "AI Upscale";
-      } catch {}
-
-      // 3. إذا فشلوا — jimp bicubic (محلي)
-      if (!resultBuffer) {
-        try {
-          const originalBuffer = await downloadBuffer(imageUrl);
-          resultBuffer = await upscaleWithJimp(originalBuffer, 2);
-          method = "Bicubic ×2";
-        } catch (e) {
-          if (loadMsg) try { await api.unsendMessage(loadMsg.messageID); } catch {}
-          api.setMessageReaction("❌", messageID, () => {}, true);
-          return message.reply(`❌ فشل رفع الجودة: ${e.message?.slice(0, 100)}`);
-        }
-      }
-
-      // 4. احفظ في cache وارسل
-      const cacheDir = path.join(__dirname, "cache");
-      await fs.ensureDir(cacheDir);
-      const tempPath = path.join(cacheDir, `upscale_${Date.now()}.jpg`);
-      await fs.writeFile(tempPath, resultBuffer);
-
-      const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
-
-      if (loadMsg) try { await api.unsendMessage(loadMsg.messageID); } catch {}
+      const sizeMB = (fs.statSync(outPath).size / (1024 * 1024)).toFixed(2);
+      api.setMessageReaction("✅", messageID, () => {}, true);
 
       await api.sendMessage(
         {
-          body:
-            `✅ تمت عملية رفع الجودة!\n` +
-            `🔧 الطريقة: ${method}\n` +
-            `⏱️ الوقت: ${elapsed}s`,
-          attachment: fs.createReadStream(tempPath)
+          body: `✅ الصورة جاهزة بجودة عالية!\n📦 الحجم: ${sizeMB} MB`,
+          attachment: fs.createReadStream(outPath)
         },
         threadID,
-        () => {
-          try { if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath); } catch {}
-        },
+        () => { try { fs.unlinkSync(outPath); } catch {} },
         messageID
       );
 
-      api.setMessageReaction("✅", messageID, () => {}, true);
-
     } catch (err) {
-      console.error("4k Error:", err);
+      console.error("[4k Error]", err);
       api.setMessageReaction("❌", messageID, () => {}, true);
-      message.reply(`❌ خطأ: ${err.message?.slice(0, 150)}`);
+      api.sendMessage("❌ وقع مشكل في تحسين الصورة، عاود المحاولة.", threadID, messageID);
     }
   }
 };
