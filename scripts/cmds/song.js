@@ -53,6 +53,14 @@ function runCommand(bin, args) {
   });
 }
 
+function ytArgs(extra = []) {
+  return [
+    "--extractor-args", "youtube:player_client=android",
+    "--js-runtimes", `node:${process.execPath}`,
+    ...extra
+  ];
+}
+
 module.exports = {
   config: {
     name: "song",
@@ -80,7 +88,7 @@ module.exports = {
       const ytdlp = await getYtdlp();
 
       const jsonRaw = await runCommand(ytdlp, [
-        "--no-playlist", "--dump-json", `ytsearch1:${query}`
+        "--no-playlist", "--dump-json", ...ytArgs(), `ytsearch1:${query}`
       ]);
       const info = JSON.parse(jsonRaw);
 
@@ -99,6 +107,7 @@ module.exports = {
       await runCommand(ytdlp, [
         "--no-playlist",
         "-x", "--audio-format", "mp3", "--audio-quality", "5",
+        ...ytArgs(),
         "-o", filePath,
         videoUrl
       ]);
@@ -117,8 +126,13 @@ module.exports = {
       setTimeout(() => { try { fs.unlinkSync(filePath); } catch {} }, 5000);
 
     } catch (e) {
-      console.error(e);
+      console.error("Song Error:", e.message?.substring(0, 300));
       api.setMessageReaction("❌", messageID, () => {}, true);
+      const msg = e.message || "";
+      const friendly = msg.includes("Sign in to confirm") ? "YouTube بلوك الطلب — عاود بعد قليل." :
+                       msg.includes("unavailable") ? "الأغنية غير متاحة." :
+                       "وقع مشكل — عاود المحاولة.";
+      api.sendMessage(`❌ ${friendly}`, threadID, messageID);
     }
   }
 };
