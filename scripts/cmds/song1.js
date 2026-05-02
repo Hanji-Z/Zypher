@@ -5,7 +5,7 @@ const yts = require("youtube-search-api");
 
 module.exports = {
   config: {
-    name: "sing",
+    name: "play",
     version: "4.1.0",
     role: 0,
     author: "Hanji",
