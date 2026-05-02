@@ -5,7 +5,7 @@ const { downloadVideo } = require("sagor-video-downloader");
 module.exports = {
     config: {
         name: "autolink",
-        version: "2.0.0",
+        version: "2.1.0",
         author: "Zypher",
         countDown: 5,
         role: 0,
@@ -15,13 +15,15 @@ module.exports = {
     onStart: async function () {},
 
     onChat: async function ({ api, event }) {
-        const { threadID, messageID, body } = event;
+        const { threadID, messageID, body, senderID } = event;
+        const botID = api.getCurrentUserID(); // كيجيب الـ ID ديال البوت نيشّان
+        
         const sidebar = "█║ ";
         const line = "█║──────────────────";
         
-        if (!body) return;
+        // 🛡️ التعديل هنا: إيلا كان لي صيفط الميساج هو البوت براسو، تجاهلو نيشّان
+        if (!body || senderID === botID) return;
 
-        // اكتشاف الروابط (TikTok, FB, IG, YT...)
         const linkMatches = body.match(/(https?:\/\/[^\s]+)/g);
         if (!linkMatches) return;
 
@@ -30,7 +32,6 @@ module.exports = {
 
         for (const url of uniqueLinks) {
             try {
-                // محاولة التحميل باستعمال المكتبة
                 const res = await downloadVideo(url);
                 const filePath = res.filePath;
 
@@ -39,7 +40,6 @@ module.exports = {
                 const stats = fs.statSync(filePath);
                 const fileSizeInMB = stats.size / (1024 * 1024);
 
-                // Messenger limit is ~25MB
                 if (fileSizeInMB > 25) {
                     fs.unlinkSync(filePath);
                     continue;
