@@ -5,63 +5,76 @@ const yts = require("youtube-search-api");
 
 module.exports = {
   config: {
-    name: "play",
-    version: "3.0.0",
+    name: "sing",
+    version: "4.1.0",
     role: 0,
     author: "Hanji",
-    description: { en: "Download music directly using yt-dlp" },
+    description: { en: "Download music with official YouTube titles" },
     category: "Music",
     guide: { en: "{pn} [song name]" },
-    countDown: 10
+    countDown: 5
   },
 
-  onStart: async function ({ api, event, args, message }) {
+  onStart: async function ({ api, event, args }) {
     const { threadID, messageID } = event;
     const query = args.join(" ");
 
-    if (!query) return message.reply("🎵 عطيني سمية الأغنية أ سيدي هانجي!");
+    if (!query) return api.setMessageReaction("❓", messageID, () => {}, true);
 
-    const cachePath = path.join(__dirname, "cache", `sing_${Date.now()}.mp3`);
-    if (!fs.existsSync(path.join(__dirname, "cache"))) fs.mkdirSync(path.join(__dirname, "cache"));
+    const cacheDir = path.join(__dirname, "cache");
+    if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir);
 
-    message.reply("🔍 جاري البحث والتحميل... صبراً جميلاً.");
+    const cachePath = path.join(cacheDir, `sing_${messageID}.mp3`);
+    const cookiePath = path.join(cacheDir, `cookies_${messageID}.txt`);
+
     api.setMessageReaction("🔍", messageID, () => {}, true);
 
     try {
-      // 1. البحث عن الفيديو
+      // 1. كنجيبو الداتا من يوتيوب نيشّان
       const search = await yts.GetListByKeyword(query, false, 1);
       const video = search.items[0];
-      if (!video) return message.reply("❌ مالقيت والو، جرب سمية أخرى.");
+      if (!video) return api.setMessageReaction("❌", messageID, () => {}, true);
 
+      // هادي هي السمية لي مديورة فـ يوتيوب (Official Title)
+      const officialTitle = video.title; 
       const videoUrl = `https://www.youtube.com/watch?v=${video.id}`;
-      
-      // 2. التحميل باستخدام yt-dlp (Direct command)
-      // -x: extract audio | --audio-format mp3
-      const cmd = `yt-dlp -x --audio-format mp3 --audio-quality 0 --output "${cachePath.replace('.mp3', '.%(ext)s')}" "${videoUrl}"`;
 
-      exec(cmd, async (error, stdout, stderr) => {
+      if (process.env.YT_COOKIES) {
+        fs.writeFileSync(cookiePath, process.env.YT_COOKIES);
+      }
+
+      const cookieArg = fs.existsSync(cookiePath) ? `--cookies "${cookiePath}"` : "";
+      api.setMessageReaction("⏬", messageID, () => {}, true);
+
+      const cmd = `yt-dlp ${cookieArg} -x --audio-format mp3 --audio-quality 0 --output "${cachePath.replace('.mp3', '.%(ext)s')}" "${videoUrl}"`;
+
+      exec(cmd, async (error) => {
         if (error) {
-            console.error(`Error: ${error.message}`);
-            api.setMessageReaction("❌", messageID, () => {}, true);
-            return message.reply("❌ وقع مشكل فـ التحميل. تأكد بلي yt-dlp كاين فـ السيرفر.");
+          api.setMessageReaction("❌", messageID, () => {}, true);
+          if (fs.existsSync(cookiePath)) fs.unlinkSync(cookiePath);
+          return;
         }
 
         if (fs.existsSync(cachePath)) {
           api.setMessageReaction("✅", messageID, () => {}, true);
-          await message.reply({
-            body: `🎵 تم التحميل أ سيدي هانجي:\n📌 العنوان: ${video.title}\n⏱️ المدى: ${video.length.simpleText}`,
+
+          api.sendMessage({
+            // هنا كنحطو السمية ديال يوتيوب ماشي الـ Query ديال المستخدم
+            body: `🎵 | ${officialTitle}`, 
             attachment: fs.createReadStream(cachePath)
-          });
-          fs.unlinkSync(cachePath); // مسح الملف مورا ما يتصيفط
+          }, threadID, () => {
+            if (fs.existsSync(cachePath)) fs.unlinkSync(cachePath);
+            if (fs.existsSync(cookiePath)) fs.unlinkSync(cookiePath);
+          }, messageID);
         } else {
-          message.reply("❌ تعذر العثور على الملف بعد التحميل.");
+          api.setMessageReaction("⚠️", messageID, () => {}, true);
+          if (fs.existsSync(cookiePath)) fs.unlinkSync(cookiePath);
         }
       });
 
     } catch (err) {
-      console.error(err);
-      message.reply("❌ كاين شي خلل فـ سكريبت البحث.");
+      api.setMessageReaction("❌", messageID, () => {}, true);
+      if (fs.existsSync(cookiePath)) fs.unlinkSync(cookiePath);
     }
   }
 };
-
