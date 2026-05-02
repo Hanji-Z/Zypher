@@ -1,0 +1,10 @@
+version: "3.8"
+services:
+  bot:
+    build: .
+    restart: always
+    environment:
+      - GEMINI_API_KEY=AIzaSyCid8KPlCAwzHSATRQwcG0UpQf2KbOWZuY
+    volumes:
+      - ./database:/app/database
+      - ./scripts/data:/app/scripts/data
