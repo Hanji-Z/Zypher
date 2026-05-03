@@ -49,7 +49,6 @@ function runCommand(bin, args) {
 function ytArgs(extra = []) {
   return [
     "--extractor-args", "youtube:player_client=android",
-    "--js-runtimes", `node:${process.execPath}`,
     ...extra
   ];
 }
@@ -73,7 +72,7 @@ function formatDuration(sec) {
 module.exports = {
   config: {
     name: "play",
-    aliases: ["mp36", "yta7", "ytmp36"],
+    aliases: ["mp33", "yta3", "ytmp33"],
     version: "2.1.0",
     author: "Hanji",
     countDown: 10,
@@ -129,7 +128,7 @@ module.exports = {
 
       await runCommand(ytdlp, [
         "--no-playlist",
-        "-f", "bestaudio[acodec^=mp4a]/18/best",
+        "-f", "18/best",
         ...ytArgs(),
         "-o", `${fileBase}.%(ext)s`,
         videoUrl
