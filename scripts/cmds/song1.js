@@ -72,7 +72,7 @@ function formatDuration(sec) {
 module.exports = {
   config: {
     name: "play",
-    aliases: ["mp33", "yta3", "ytmp33"],
+    aliases: ["mp3", "yta", "ytmp3"],
     version: "2.1.0",
     author: "Hanji",
     countDown: 10,
