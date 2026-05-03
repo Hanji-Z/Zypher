@@ -1,104 +1,126 @@
-const { createCanvas, loadImage } = require("canvas");
+const { createCanvas } = require("canvas");
 const fs = require("fs-extra");
-const path = require("path");
 const os = require("os");
 
 module.exports = {
   config: {
     name: "uptime",
     aliases: ["up", "upt"],
-    version: "3.0.2",
+    version: "4.1.0",
     author: "Hanji",
-    role: 2,
+    role: 0,
     category: "system",
-    shortDescription: { en: "Display Ultimate Hacker Stats" }
+    shortDescription: { en: "Zypher system dashboard" }
   },
 
   onStart: async function ({ api, event, usersData, threadsData }) {
     const { threadID, messageID } = event;
 
     try {
-      // 1️⃣ جلب البيانات (مع حماية إيلا كان شي متغير ناقص)
-      const allUsers = (await usersData.getAll()) || [];
+      const allUsers  = (await usersData.getAll())  || [];
       const allThreads = (await threadsData.getAll()) || [];
       const uptime = process.uptime();
-      
-      const days = Math.floor(uptime / 86400);
-      const hours = Math.floor((uptime % 86400) / 3600);
+
+      const days    = Math.floor(uptime / 86400);
+      const hours   = Math.floor((uptime % 86400) / 3600);
       const minutes = Math.floor((uptime % 3600) / 60);
       const seconds = Math.floor(uptime % 60);
-      const uptimeStr = `${days}d ${hours}h ${minutes}m ${seconds}s`;
+      const uptimeStr = days > 0
+        ? `${days}d ${hours}h ${minutes}m`
+        : `${hours}h ${minutes}m ${seconds}s`;
 
-      const ramUsage = (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2);
-      const nodeVersion = process.version;
-      const osPlatform = `${os.platform()} ${os.arch()}`;
-      
-      // 🛡️ حماية الـ Prefix (في GoatBot كيكون غالبا فـ هاد المسارات)
-      const prefix = global.config?.PREFIX || global.GoatBot?.config?.prefix || ".";
-      
-      const startTime = Date.now();
-      const ping = Date.now() - startTime; // حساب تقريبي
+      const mem       = process.memoryUsage();
+      const ramUsed   = (mem.heapUsed / 1024 / 1024).toFixed(1);
+      const ramTotal  = (mem.heapTotal / 1024 / 1024).toFixed(1);
+      const ramPct    = Math.min(100, Math.round((mem.heapUsed / mem.heapTotal) * 100));
 
-      // 2️⃣ رسم البطاقة
-      const width = 800;
-      const height = 450;
-      const canvas = createCanvas(width, height);
+      const totalRamMB = Math.round(os.totalmem() / 1024 / 1024);
+      const freeRamMB  = Math.round(os.freemem() / 1024 / 1024);
+      const usedRamMB  = totalRamMB - freeRamMB;
+      const sysRamPct  = Math.min(100, Math.round((usedRamMB / totalRamMB) * 100));
+
+      const prefix       = global.GoatBot?.config?.prefix || ".";
+      const totalCmds    = global.GoatBot?.commands?.size || 0;
+
+      const W = 820, H = 520;
+      const canvas = createCanvas(W, H);
       const ctx = canvas.getContext("2d");
 
-      // الخلفية
-      ctx.fillStyle = "#0f0c29"; 
-      ctx.fillRect(0, 0, width, height);
+      // Background
+      ctx.fillStyle = "#0d1117";
+      ctx.fillRect(0, 0, W, H);
 
-      // برواز النيون
-      ctx.strokeStyle = "#00ffcc";
-      ctx.lineWidth = 8;
-      ctx.strokeRect(20, 20, width - 40, height - 40);
+      // Border
+      ctx.strokeStyle = "#30363d";
+      ctx.lineWidth = 4;
+      ctx.strokeRect(10, 10, W - 20, H - 20);
 
-      // العنوان
-      ctx.font = "bold 45px sans-serif"; // استعملت sans-serif حيت مضمونة فكاع السيستمات
-      ctx.fillStyle = "#ffffff";
-      ctx.fillText("[ ZYPHER SYSTEM ]", 200, 80);
-      
-      ctx.font = "20px sans-serif";
-      ctx.fillStyle = "rgba(0, 255, 204, 0.7)";
-      ctx.fillText(">>> TERMINAL MONITOR v3.0 <<<", 250, 110);
-
-      // رسم الإحصائيات
-      ctx.font = "22px sans-serif";
-      const draw = (txt, val, x, y) => {
-        ctx.fillStyle = "#00ffcc"; ctx.fillText(txt, x, y);
-        ctx.fillStyle = "#ffffff"; ctx.fillText(val, x, y + 30);
+      // Helpers
+      const roundRect = (x, y, w, h, r, fill) => {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + w, y, x + w, y + h, r);
+        ctx.arcTo(x + w, x + h, x, y + h, r);
+        ctx.arcTo(x, y + h, x, y, r);
+        ctx.arcTo(x, y, x + w, y, r);
+        ctx.closePath();
+        ctx.fillStyle = fill;
+        ctx.fill();
       };
 
-      draw("OS Platform:", osPlatform, 80, 170);
-      draw("Node.js:", nodeVersion, 80, 250);
-      draw("Ping Latency:", `${ping}ms`, 80, 330);
+      // Header
+      roundRect(20, 20, W - 40, 80, 12, "#161b22");
       
-      draw("RAM Usage:", `${ramUsage} MB`, 450, 170);
-      draw("Total Users:", allUsers.length.toString(), 450, 250);
-      draw("Bot Uptime:", uptimeStr, 450, 330);
+      // Text - زدت Arial و Impact حيت كيكونو ديما فـ السيرفرات
+      ctx.fillStyle = "#00d4ff";
+      ctx.font = "bold 35px Arial, sans-serif";
+      ctx.fillText("𝗭𝗬𝗣𝗛𝗘𝗥 𝗦𝗬𝗦𝗧𝗘𝗠", 130, 70);
 
-      // توقيع هانجي
-      ctx.font = "italic 18px sans-serif";
-      ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
-      ctx.fillText(`Prefix: ${prefix} | Dev: Hanji`, 550, 410);
+      // Stat Cards
+      const cards = [
+        { l: "Uptime", v: uptimeStr, c: "#00d4ff" },
+        { l: "Users", v: allUsers.length.toString(), c: "#a78bfa" },
+        { l: "Groups", v: allThreads.length.toString(), c: "#34d399" },
+        { l: "RAM Pct", v: `${ramPct}%`, c: "#fbbf24" }
+      ];
 
-      // 3️⃣ الإرسال
-      const cacheDir = path.join(__dirname, "cache");
-      if (!fs.existsSync(cacheDir)) fs.ensureDirSync(cacheDir);
-      const cachePath = path.join(cacheDir, `up_${Date.now()}.png`);
+      cards.forEach((card, i) => {
+        const x = 30 + (i * 190);
+        roundRect(x, 130, 180, 100, 10, "#1c2128");
+        ctx.fillStyle = card.c;
+        ctx.font = "15px Arial";
+        ctx.fillText(card.l, x + 15, 160);
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 22px Arial";
+        ctx.fillText(card.v, x + 15, 200);
+      });
+
+      // RAM Progress Bars
+      ctx.fillStyle = "#8b949e";
+      ctx.font = "bold 16px Arial";
+      ctx.fillText("MEMORY USAGE (HEAP)", 40, 280);
       
-      const buffer = canvas.toBuffer("image/png");
-      fs.writeFileSync(cachePath, buffer);
+      // Gray bar
+      roundRect(40, 300, W - 80, 20, 10, "#30363d");
+      // Green bar
+      roundRect(40, 300, (W - 80) * (ramPct / 100), 20, 10, "#34d399");
+
+      // Footer
+      ctx.fillStyle = "#484f58";
+      ctx.font = "14px Arial";
+      ctx.fillText(`Owner: Hanji | Platform: ${os.platform()} | Node: ${process.version}`, 40, H - 40);
+
+      // ── Send as Buffer (The Fix) ──
+      const imageBuffer = canvas.toBuffer("image/png");
 
       return api.sendMessage({
-        body: "📊 [ 𝗭𝗬𝗣𝗛𝗘𝗥 𝗗𝗔𝗦𝗛𝗕𝗢𝗔𝗥𝗗 ]",
-        attachment: fs.createReadStream(cachePath)
-      }, threadID, () => fs.unlinkSync(cachePath), messageID);
+        body: "📊 لوحة تحكم نظام زيفر جاهزة:",
+        attachment: imageBuffer
+      }, threadID, messageID);
 
-    } catch (error) {
-      console.error("CRITICAL UPTIME ERROR:", error); // هادي غاتبان ليك فـ Railway Logs بالتدقيق
-      api.sendMessage(`❌ Error: ${error.message}`, threadID, messageID);
+    } catch (err) {
+      console.error(err);
+      return api.sendMessage(`❌ Error: ${err.message}`, threadID, messageID);
     }
   }
 };
