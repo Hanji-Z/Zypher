@@ -249,4 +249,182 @@ module.exports = {
         if (Array.isArray(history) && history.length > 0) {
           const recent = [];
           for (const msg of history) {
-            if (!msg?.body ||  
+            if (!msg?.body || msg.messageID === messageID) continue;
+            const sender = msg.senderID === botID ? "زيفر" : (msg.senderName || "شخص");
+            recent.push(`${sender}: ${String(msg.body).replace(/\s+/g, " ").slice(0, 200)}`);
+          }
+          if (recent.length) contextBlock = `\nآخر ${Math.min(recent.length, 12)} رسائل (السياق):\n${recent.slice(-12).join("\n")}`;
+        }
+      } catch { /* skip */ }
+
+      let agentBlock = "";
+      let memberList = [];
+      if (isAgentEnabled) {
+        try {
+          const tInfo = await Promise.race([
+            api.getThreadInfo(threadID),
+            new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 4000))
+          ]);
+          if (tInfo?.userInfo?.length) {
+            memberList = tInfo.userInfo.map(u => ({ id: u.id, name: u.name })).slice(0, 80);
+          }
+        } catch { /* skip */ }
+
+        const membersStr = memberList.length
+          ? memberList.map(m => `  - ${m.name} -> ${m.id}`).join("\n")
+          : "  (ماكايناش معلومات على الأعضاء)";
+
+        const cmdsStr = buildCommandsBlock();
+
+        agentBlock = `
+
+===========================
+AGENT MODE — مفعل
+===========================
+
+عندك صلاحية تنفذ الكوموندات أوتوماتيكيا. منين المستخدم يطلب شي حاجة لي تقدر تديرها كوموند، خرج block خاص بهاد الصيغة بالضبط:
+
+<<<EXEC>>>{"cmd":"اسم_الكوموند","args":"الحجج هنا"}<<<END>>>
+
+قواعد مهمة:
+- خرج block غير منين تكون متأكد 100% أن المستخدم بغا تنفذ شي حاجة.
+- إيلا غير كيهضر معاك بشكل عادي → جاوب بنص عادي بلا EXEC.
+- للأشخاص: استعمل @الاسم (مثلا @Osama). أنا غادي نحل الـ ID لوحدي من اللائحة تحت.
+- تقدر ترسل نص + EXEC مع بعضهم.
+- إيلا الكوموند يحتاج role أعلى من المستخدم، ما تخرجش EXEC، قول ليه أنه ما عندوش الصلاحية.
+- المستخدم الحالي عندو role: ${role} (0=عادي، 1=أدمن كروب، 2=أدمن بوت).
+- ممنوع تنفذ كوموندات: ${AGENT_BLOCKLIST.join(", ")}.
+
+أعضاء الكروب (للـ mentions):
+${membersStr}
+
+الكوموندات المتاحة (${global.GoatBot.commands.size} كوموند):
+${cmdsStr}
+
+===========================
+أمثلة:
+- "طرد أسامة" -> <<<EXEC>>>{"cmd":"kick","args":"@Osama"}<<<END>>>
+- "زيفر طرد هاد ولد ناس" (مع reply على رسالته) -> <<<EXEC>>>{"cmd":"kick","args":""}<<<END>>> (kick كيجيب الشخص من الـ reply تلقائياً)
+- "جيب لي أغنية يا ليلي" -> <<<EXEC>>>{"cmd":"play","args":"يا ليلي"}<<<END>>>
+- "صور قطط من بنترست" -> <<<EXEC>>>{"cmd":"pinterest","args":"cats -5"}<<<END>>>
+- "كيداير؟" -> جاوب عاديا بدون EXEC
+===========================`;
+      }
+
+      const systemPromptText = `أنت زيفر (Zypher) — الـ AI Agent ديال البوت لي صنعو المعلم هانجي.
+
+اللغة:
+- هضر دائماً بالدارجة المغربية البسيطة، ماشي العربية الفصحى.
+- استعمل: "وش، شنو، فين، علاش، دابا، بصح، صافي، خويا، صاحبي، ياك، بزاف، دير، خاص، كاين، ماكاينش".
+- ممنوع تهضر بالفصحى.
+
+المطور:
+- المعلم هانجي: صاحب البوت، تقدسو دائماً.
+- الأدمنات: حترمهم.
+
+المستخدم الحالي:
+- الاسم: ${name}
+- ID: ${senderIdStr}
+- ${userRole}
+${notesBlock}
+${replyTargetBlock}
+${contextBlock}
+${agentBlock}
+
+الأسلوب:
+- ردود قصيرة ومباشرة بحال هضرة عادية.
+${customNotes.length ? "- التزم بالنويطات لي فوق فالردود.\n" : ""}- إيلا سولوك على المطور قول: "صاوبني المعلم هانجي".
+
+محظورات:
+- ما تهضرش الفصحى.
+- ما تنسى أن هانجي هو سيدك.`;
+
+      let userHistory = global.zipher_context.get(senderID) || [];
+      userHistory.push({ role: "user", content: body });
+      if (userHistory.length > 15) userHistory.shift();
+
+      const contents = userHistory.map(msg => ({
+        role: msg.role === "assistant" ? "model" : "user",
+        parts: [{ text: msg.content }]
+      }));
+
+      const isReplitProxy = baseURL.includes("localhost") || baseURL.includes("modelfarm");
+      const url = isReplitProxy
+        ? `${baseURL}/models/${geminiModel}:generateContent`
+        : `${baseURL}/v1beta/models/${geminiModel}:generateContent?key=${apiKey}`;
+      const headers = isReplitProxy
+        ? { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` }
+        : { "Content-Type": "application/json" };
+
+      const res = await axios.post(
+        url,
+        {
+          systemInstruction: { parts: [{ text: systemPromptText }] },
+          contents,
+          generationConfig: { temperature: 0.7, maxOutputTokens: 2000, topP: 0.9 }
+        },
+        { headers, timeout: 30000 }
+      );
+
+      const responseText = res.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!responseText) return;
+
+      let raw = responseText.trim();
+
+      let agentReport = "";
+      if (isAgentEnabled) {
+        const { blocks, cleaned } = extractExecBlocks(raw);
+
+        if (blocks.length) {
+          const ctx = {
+            event,
+            prefix,
+            role,
+            memberList,
+            fullParams: params
+          };
+
+          const results = [];
+          for (const block of blocks) {
+            const r = await executeAgentCommand(block, ctx);
+            results.push({ block, r });
+          }
+
+          const failed = results.filter(x => x.r && !x.r.ok);
+          if (failed.length) {
+            agentReport = "\n\nبعض الكوموندات ما تنفذاتش:\n" + failed.map(f => `  - ${f.r.error}`).join("\n");
+          }
+
+          raw = cleaned || (blocks.length && !failed.length ? "صافي تنفذ." : "");
+        }
+      } else {
+        const { cleaned } = extractExecBlocks(raw);
+        if (cleaned !== raw) {
+          raw = cleaned + "\n\n(لتفعيل تنفيذ الكوموندات: `.ai agent on` — أدمن فقط)";
+        }
+      }
+
+      const finalReply = (raw + agentReport).trim();
+      if (!finalReply) return;
+
+      userHistory.push({ role: "assistant", content: finalReply });
+      global.zipher_context.set(senderID, userHistory);
+
+      if (global.zipher_context.has(senderID + "_timer")) {
+        clearTimeout(global.zipher_context.get(senderID + "_timer"));
+      }
+      const timer = setTimeout(() => {
+        global.zipher_context.delete(senderID);
+        global.zipher_context.delete(senderID + "_timer");
+      }, 30 * 60 * 1000);
+      global.zipher_context.set(senderID + "_timer", timer);
+
+      return message.reply(finalReply);
+
+    } catch (error) {
+      console.error("Zipher AI Error:", error.message);
+      const errMsg = error?.response?.data?.error?.message || error.message || "unknown";
+      return message.reply(`زيفر — صرا خطأ:\n${errMsg}`);
+    }
+  }
+};
