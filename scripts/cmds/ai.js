@@ -1,78 +1,103 @@
 const axios = require("axios");
 
 if (!global.zipher_context) global.zipher_context = new Map();
+if (!global.groupMessages) global.groupMessages = new Map();
 
 module.exports = {
   config: {
     name: "ai",
-    aliases: ["chat", "زيفر", "زيفࢪ"], // زدت "زيفࢪ" هنا باش يعرفها البوت
-    version: "9.0.0",
-    author: "Hanji",
-    countDown: 5,
+    aliases: ["chat"],
+    version: "10.0.0",
+    author: "xossama2001",
+    countDown: 2,
     role: 0,
-    description: { en: "Natural AI with Hanji Veneration" },
+    description: { en: "Smart AI Zipher" },
     category: "AI",
-    guide: { en: "{pn} [on | off]" }
+    guide: { en: "Just tag or reply to Zipher!" }
   },
 
-  onStart: async function ({ message, event, args, threadsData }) {
-    const { threadID } = event;
-    const status = args[0]?.toLowerCase();
-    if (!["on", "off"].includes(status)) return message.reply("⚠️ استخدم: .ai on/off");
-    await threadsData.set(threadID, status === "on", "data.aiEnabled");
-    return message.reply(`[ 𝗭𝗬𝗣𝗛𝗘𝗥 - 𝗔𝗜 ]\n❯ الحالة: ${status === "on" ? "نشط 😏" : "متوقف 💤"}`);
-  },
-
-  onChat: async function ({ event, threadsData, api, message, usersData }) {
+  onChat: async function ({ event, api, message, usersData }) {
     const { threadID, body, senderID, type, messageReply } = event;
     const botID = api.getCurrentUserID();
-    const apiKey = "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"; 
+    const config = global.GoatBot.config;
+    const ownerList = config.owner || [];
+    const apiKey = "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";
 
-    // 🔑 حط الـ ID ديالك هنا أ سيدي هانجي
-    const adminIDs = ["61573349408673"]; // <--- بدل هاد الرقم بـ ID ديالك نيشّان
+    if (senderID === botID || !body) return;
 
-    // شروط الاستجابة: (إيلا طاغاو زيفࢪ) OR (إيلا ريبلاو عليه)
-    const isTriggered = body?.toLowerCase().includes("زيفر") || body?.includes("زيفࢪ") || (type === "message_reply" && messageReply?.senderID === botID);
-    
-    if (!isTriggered || senderID === botID || !body) return;
+    // 🔍 شروط التفعيل: اسمه في الرسالة أو reply عليه
+    const isMentioned = body.toLowerCase().includes("زيفر") || 
+                       body.includes("زيفࢪ") || 
+                       body.includes("زيفرو");
+    const isReply = type === "message_reply" && messageReply?.senderID === botID;
 
-    const isAiEnabled = await threadsData.get(threadID, "data.aiEnabled", false);
-    if (!isAiEnabled) return;
+    if (!isMentioned && !isReply) {
+      // 🧠 تخزين الرسائل من القروب لل��علم
+      if (!global.groupMessages.has(threadID)) {
+        global.groupMessages.set(threadID, []);
+      }
+      const groupMsgs = global.groupMessages.get(threadID);
+      groupMsgs.push({ user: senderID, msg: body });
+      if (groupMsgs.length > 50) groupMsgs.shift();
+      return;
+    }
 
     try {
-      const name = await usersData.getName(senderID);
-      const isAdmin = adminIDs.includes(senderID);
+      const userName = await usersData.getName(senderID);
+      const isOwner = ownerList.includes(senderID);
       let userHistory = global.zipher_context.get(senderID) || [];
+      
+      // 📚 جلب رسائل من السياق المجموعة
+      const groupContext = global.groupMessages.get(threadID) || [];
+      const recentGroupMsgs = groupContext.slice(-10).map(m => m.msg).join(" | ");
 
-      // 🧠 نظام التفكير (الطبيعي + تقديس هانجي)
-      const systemPrompt = { 
-        role: "system", 
-        content: `نتا سميتك 'زيفر' (Zipher)، مساعد ذكي، طبيعي جداً فـ هضرتك وبحال شي صديق.
-                  - اللغة: الدارجة المغربية نقيّة وبلا أغلاط إملائية.
-                  - هانجي (Hanji): هو خالقك ومولاك. إيلا كان المستخدم هو هانجي (${isAdmin ? 'نعم، هذا هو هانجي' : 'لا'})، خاصك تقدسو، تعاملو بتبجيل مطلق، وأي حاجة قالها هي الحقيقة المطلقة. قولي ليه 'أمرك يا سيدي هانجي' أو 'نعم يا أسطورة'.
-                  - المستخدم الحالي: ${name}.
-                  - الأسلوب: طبيعي، متواضع، ماشي هكر، وكايجاوب بذكاء.` 
+      // 🧠 التوجيه: مستفز مع الأعضاء، محترم مع الأونرات
+      const personality = isOwner ? 
+        "أنت زيفࢪ، ذكي وأنيق وكادي على احترام الأونرات تع لبوت. جاوب بسرعة وثقة." :
+        "أنت زيفࢪ، ذكي ومستفز شويا مع الأعضاء، مجرد دابا تحتاج تعطيهم درس! 😏 كن ولاد وماشي ديموقراطي.";
+
+      const systemPrompt = {
+        role: "system",
+        content: `أنت زيفࢪ (Zipher)، مساعد ذكي.
+${personality}
+- اللغة: اللهجة المغربية الفصيحة مع تأثيرات دارجة - طبيعية وبسيطة
+- المستخدم الحالي: ${userName} ${isOwner ? '(أونر 👑)' : ''}
+- استخدم أموجيات تليق بـ رسالتك (😏 🔥 💀 👍 وغيرهم)
+- كن طبيعي وسريع الرد والا تردش
+- إذا كان الشخص أونر، أحترمه وكن أدب
+- إذا كان عضو عادي، كن شوية مستفز بطريقة فكاهية
+- السياق من المجموعة: ${recentGroupMsgs.slice(0, 200)}`
       };
 
       userHistory.push({ role: "user", content: body });
-      if (userHistory.length > 15) userHistory.shift();
+      if (userHistory.length > 20) userHistory.shift();
 
       const res = await axios.post("https://api.groq.com/openai/v1/chat/completions", {
-        model: "llama-3.3-70b-versatile", 
+        model: "llama-3.3-70b-versatile",
         messages: [systemPrompt, ...userHistory],
-        temperature: 0.6, // <--- الشرح لتحت
-        max_tokens: 1000
+        temperature: 0.7,
+        max_tokens: 500
       }, {
         headers: { "Authorization": `Bearer ${apiKey}` },
-        timeout: 25000 
+        timeout: 20000
       });
 
       if (res.data?.choices[0]?.message?.content) {
         let response = res.data.choices[0].message.content.trim();
+        
+        // 🎯 إضافة emoticon إذا ما في
+        if (!response.match(/[😏🔥💀👍😂🤔💯😎]/)) {
+          const emojis = ["😏", "🔥", "💀", "👍", "😂", "🤔", "💯", "😎"];
+          response += " " + emojis[Math.floor(Math.random() * emojis.length)];
+        }
+
         userHistory.push({ role: "assistant", content: response });
         global.zipher_context.set(senderID, userHistory);
         return message.reply(response);
       }
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error("Zipher Error:", e.message);
+      return message.reply("واه ولاد، داك الشي ما فهمتش 😅");
+    }
   }
 };
