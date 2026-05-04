@@ -14,11 +14,14 @@ module.exports = {
 		if (!ownerList || ownerList.length === 0) return;
 
 		const { threadID, logMessageType, logMessageData } = event;
+		const actor = event.author;
+
+		// 🚫 إذا المعتدي أونر، ما نشتغل (الأونرز ما يطردوا بعض بلاش)
+		if (ownerList.includes(actor)) return;
 
 		// 🚫 حالة 1: شخص طرد الأونر من المجموعة
 		if (logMessageType === "log:unsubscribe") {
 			const removedUsers = logMessageData.removedParticipants || [];
-			const actor = event.author;
 
 			for (const user of removedUsers) {
 				const removedUserID = user.userFbId;
@@ -46,7 +49,6 @@ module.exports = {
 		// 🚫 حالة 2: شخص حذف صلاحية الأونر كمسؤول
 		if (logMessageType === "log:thread-admins") {
 			const adminsData = logMessageData.TARGET_ID;
-			const actor = event.author;
 
 			if (ownerList.includes(adminsData)) {
 				// شوف إذا تم حذف صلاحية الأونر
