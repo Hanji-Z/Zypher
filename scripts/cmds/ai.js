@@ -16,6 +16,11 @@ module.exports = {
     guide: { en: "Just tag or reply to Zipher!" }
   },
 
+  // 🛠️ هادي هي لي كانت ناقصاك أ عشيري باش ما يبقاش يعطي Error فـ Railway
+  onStart: async function ({}) {
+    // هادي كتبقى خاوية حيت نتا خدام بـ onChat (Auto-responder)
+  },
+
   onChat: async function ({ event, api, message, usersData }) {
     const { threadID, body, senderID, type, messageReply } = event;
     const botID = api.getCurrentUserID();
@@ -25,14 +30,12 @@ module.exports = {
 
     if (senderID === botID || !body) return;
 
-    // 🔍 شروط التفعيل: اسمه في الرسالة أو reply عليه
     const isMentioned = body.toLowerCase().includes("زيفر") || 
                        body.includes("زيفࢪ") || 
                        body.includes("زيفرو");
     const isReply = type === "message_reply" && messageReply?.senderID === botID;
 
     if (!isMentioned && !isReply) {
-      // 🧠 تخزين الرسائل من القروب لل��علم
       if (!global.groupMessages.has(threadID)) {
         global.groupMessages.set(threadID, []);
       }
@@ -47,11 +50,9 @@ module.exports = {
       const isOwner = ownerList.includes(senderID);
       let userHistory = global.zipher_context.get(senderID) || [];
       
-      // 📚 جلب رسائل من السياق المجموعة
       const groupContext = global.groupMessages.get(threadID) || [];
       const recentGroupMsgs = groupContext.slice(-10).map(m => m.msg).join(" | ");
 
-      // 🧠 التوجيه: مستفز مع الأعضاء، محترم مع الأونرات
       const personality = isOwner ? 
         "أنت زيفࢪ، ذكي وأنيق وكادي على احترام الأونرات تع لبوت. جاوب بسرعة وثقة." :
         "أنت زيفࢪ، ذكي ومستفز شويا مع الأعضاء، مجرد دابا تحتاج تعطيهم درس! 😏 كن ولاد وماشي ديموقراطي.";
@@ -60,12 +61,8 @@ module.exports = {
         role: "system",
         content: `أنت زيفࢪ (Zipher)، مساعد ذكي.
 ${personality}
-- اللغة: اللهجة المغربية الفصيحة مع تأثيرات دارجة - طبيعية وبسيطة
+- اللغة: اللهجة المغربية الفصيحة مع تأثيرات دارجة
 - المستخدم الحالي: ${userName} ${isOwner ? '(أونر 👑)' : ''}
-- استخدم أموجيات تليق بـ رسالتك (😏 🔥 💀 👍 وغيرهم)
-- كن طبيعي وسريع الرد والا تردش
-- إذا كان الشخص أونر، أحترمه وكن أدب
-- إذا كان عضو عادي، كن شوية مستفز بطريقة فكاهية
 - السياق من المجموعة: ${recentGroupMsgs.slice(0, 200)}`
       };
 
@@ -84,13 +81,6 @@ ${personality}
 
       if (res.data?.choices[0]?.message?.content) {
         let response = res.data.choices[0].message.content.trim();
-        
-        // 🎯 إضافة emoticon إذا ما في
-        if (!response.match(/[😏🔥💀👍😂🤔💯😎]/)) {
-          const emojis = ["😏", "🔥", "💀", "👍", "😂", "🤔", "💯", "😎"];
-          response += " " + emojis[Math.floor(Math.random() * emojis.length)];
-        }
-
         userHistory.push({ role: "assistant", content: response });
         global.zipher_context.set(senderID, userHistory);
         return message.reply(response);
