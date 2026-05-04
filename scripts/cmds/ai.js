@@ -21,7 +21,7 @@ module.exports = {
     const botID = api.getCurrentUserID();
     const config = global.GoatBot.config;
     const ownerList = config.owner || [];
-    const apiKey = "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";
+    const apiKey = "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";
 
     if (senderID === botID || !body) return;
 
