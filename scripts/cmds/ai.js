@@ -7,19 +7,16 @@ module.exports = {
   config: {
     name: "ai",
     aliases: ["chat"],
-    version: "10.0.0",
-    author: "xossama2001",
+    version: "10.2.2",
+    author: "Hanji",
     countDown: 2,
     role: 0,
-    description: { en: "Smart AI Zipher" },
+    description: { en: "Anti-Conflict AI System" },
     category: "AI",
-    guide: { en: "Just tag or reply to Zipher!" }
+    guide: { en: "No interference with games!" }
   },
 
-  // 🛠️ هادي هي لي كانت ناقصاك أ عشيري باش ما يبقاش يعطي Error فـ Railway
-  onStart: async function ({}) {
-    // هادي كتبقى خاوية حيت نتا خدام بـ onChat (Auto-responder)
-  },
+  onStart: async function ({}) {},
 
   onChat: async function ({ event, api, message, usersData }) {
     const { threadID, body, senderID, type, messageReply } = event;
@@ -30,18 +27,18 @@ module.exports = {
 
     if (senderID === botID || !body) return;
 
-    const isMentioned = body.toLowerCase().includes("زيفر") || 
-                       body.includes("زيفࢪ") || 
-                       body.includes("زيفرو");
+    const isMentioned = body.toLowerCase().includes("زيفر") || body.includes("زيفࢪ");
     const isReply = type === "message_reply" && messageReply?.senderID === botID;
 
+    // 🎯 فيلتر الألعاب المطور: من 1 حتى لـ 6 أرقام (لألعاب XO والتخمين)
+    const isGameAction = isReply && /^\d{1,6}$/.test(body.trim());
+    if (isGameAction) return;
+
     if (!isMentioned && !isReply) {
-      if (!global.groupMessages.has(threadID)) {
-        global.groupMessages.set(threadID, []);
-      }
+      if (!global.groupMessages.has(threadID)) global.groupMessages.set(threadID, []);
       const groupMsgs = global.groupMessages.get(threadID);
       groupMsgs.push({ user: senderID, msg: body });
-      if (groupMsgs.length > 50) groupMsgs.shift();
+      if (groupMsgs.length > 20) groupMsgs.shift();
       return;
     }
 
@@ -51,32 +48,27 @@ module.exports = {
       let userHistory = global.zipher_context.get(senderID) || [];
       
       const groupContext = global.groupMessages.get(threadID) || [];
-      const recentGroupMsgs = groupContext.slice(-10).map(m => m.msg).join(" | ");
-
-      const personality = isOwner ? 
-        "أنت زيفࢪ، ذكي وأنيق وكادي على احترام الأونرات تع لبوت. جاوب بسرعة وثقة." :
-        "أنت زيفࢪ، ذكي ومستفز شويا مع الأعضاء، مجرد دابا تحتاج تعطيهم درس! 😏 كن ولاد وماشي ديموقراطي.";
+      const recentGroupMsgs = groupContext.slice(-6).map(m => m.msg).join(" | ");
 
       const systemPrompt = {
         role: "system",
-        content: `أنت زيفࢪ (Zipher)، مساعد ذكي.
-${personality}
-- اللغة: اللهجة المغربية الفصيحة مع تأثيرات دارجة
-- المستخدم الحالي: ${userName} ${isOwner ? '(أونر 👑)' : ''}
-- السياق من المجموعة: ${recentGroupMsgs.slice(0, 200)}`
+        content: `نتا هو زيفࢪ (Zipher). إنسان طبيعي بستايل مغربي دارجة.
+- المطور: هانجي (Hanji) هو الشاف ديالي.
+- ممنوع: "أنا بوت"، "AI"، "Meta".
+- ممنوع تعاود هضرة الناس.
+- سياق الهضرة: ${recentGroupMsgs}`
       };
 
       userHistory.push({ role: "user", content: body });
-      if (userHistory.length > 20) userHistory.shift();
+      if (userHistory.length > 10) userHistory.shift();
 
       const res = await axios.post("https://api.groq.com/openai/v1/chat/completions", {
         model: "llama-3.3-70b-versatile",
         messages: [systemPrompt, ...userHistory],
-        temperature: 0.7,
-        max_tokens: 500
+        temperature: 0.8
       }, {
         headers: { "Authorization": `Bearer ${apiKey}` },
-        timeout: 20000
+        timeout: 25000
       });
 
       if (res.data?.choices[0]?.message?.content) {
@@ -86,8 +78,7 @@ ${personality}
         return message.reply(response);
       }
     } catch (e) {
-      console.error("Zipher Error:", e.message);
-      return message.reply("واه ولاد، داك الشي ما فهمتش 😅");
+      console.error(e);
     }
   }
 };
