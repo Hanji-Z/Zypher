@@ -33,9 +33,6 @@ module.exports = {
     }
 
     const { threadID, messageID, messageReply, mentions, senderID } = event;
-    const type = args[0];
-
-    if (!type) return api.sendMessage("Use: fun slap @tag", threadID, messageID);
 
     let id = senderID;
     let id2;
