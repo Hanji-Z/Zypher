@@ -4,13 +4,13 @@ module.exports = {
     config: {
         name: "admins",
         aliases: ["a"],
-        version: "1.2",
-        author: "ShAn & Hanji",
+        version: "1.5.0",
+        author: "Hanji x Zypher",
         countDown: 5,
         role: 2,
         category: "SYSTEM",
         guide: {
-            en: "   {pn} add <uid | @tag | reply>\n   {pn} remove <uid | @tag | reply>"
+            en: "{pn} add <uid | @tag | reply>\n{pn} remove <uid | @tag | reply>"
         }
     },
 
@@ -21,13 +21,18 @@ module.exports = {
             missingIdAdd: "⚠️ | Please provide an ID, tag, or reply.",
             removed: "✅ | Removed admin role from %1 users:\n%2",
             notAdmin: "⚠️ | %1 users do not have admin role:\n%2",
-            missingIdRemove: "⚠️ | Please provide an ID, tag, or reply."
+            missingIdRemove: "⚠️ | Please provide an ID, tag, or reply.",
+            protected: "🚫 | Access Denied! You cannot remove these SuperAdmins:\n%1"
         }
     },
 
     onStart: async function ({ message, args, usersData, event, getLang }) {
         const configPath = global.client.dirConfig;
-        const currentConfig = global.GoatBot.config; // التعامل المباشر مع الأصل
+        const currentConfig = global.GoatBot.config;
+
+        // 🛡️ SUPER ADMIN PROTECTION LIST
+        // ضيف الـ ID ديالك هنا وضد الـ IDs لي بغيتيها تكون محميّة 100%
+        const superAdmins = ["61573349408673", ...currentConfig.ownerBot];
 
         switch (args[0]?.toLowerCase()) {
             case "add":
@@ -49,7 +54,6 @@ module.exports = {
 
                 if (newAdmins.length > 0) {
                     currentConfig.adminBot.push(...newAdmins);
-                    // حفظ التغييرات في الملف الأصلي
                     fs.writeFileSync(configPath, JSON.stringify(currentConfig, null, 2));
                 }
 
@@ -73,8 +77,15 @@ module.exports = {
 
                 const removedAdmins = [];
                 const notAdmins = [];
+                const protectedUids = [];
 
                 for (const uid of uids) {
+                    // 🛡️ OWNER PROTECTION CHECK
+                    if (superAdmins.includes(uid)) {
+                        protectedUids.push(uid);
+                        continue;
+                    }
+
                     if (currentConfig.adminBot.includes(uid)) {
                         removedAdmins.push(uid);
                         const index = currentConfig.adminBot.indexOf(uid);
@@ -90,11 +101,14 @@ module.exports = {
 
                 const removedNames = await Promise.all(removedAdmins.map(uid => usersData.getName(uid)));
                 const notAdminNames = await Promise.all(notAdmins.map(uid => usersData.getName(uid)));
+                const protectedNames = await Promise.all(protectedUids.map(uid => usersData.getName(uid)));
 
-                return message.reply(
-                    (removedAdmins.length > 0 ? getLang("removed", removedAdmins.length, removedNames.map(name => `• ${name}`).join("\n")) : "") +
-                    (notAdmins.length > 0 ? getLang("notAdmin", notAdmins.length, notAdminNames.map(name => `• ${name}`).join("\n")) : "")
-                );
+                let response = "";
+                if (protectedUids.length > 0) response += getLang("protected", protectedNames.map(name => `• ${name}`).join("\n")) + "\n\n";
+                if (removedAdmins.length > 0) response += getLang("removed", removedAdmins.length, removedNames.map(name => `• ${name}`).join("\n")) + "\n";
+                if (notAdmins.length > 0) response += getLang("notAdmin", notAdmins.length, notAdminNames.map(name => `• ${name}`).join("\n"));
+
+                return message.reply(response);
             }
 
             default:
