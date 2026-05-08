@@ -193,24 +193,31 @@ module.exports = async function (databaseType, threadModel, api, fakeGraphql) {
                                 }
                                 threadInfo = threadInfo || await api.getThreadInfo(threadID);
                                 if (!threadInfo) {
-                                        throw new CustomError({
-                                                name: "THREAD_INFO_NULL",
-                                                message: `Cannot get thread info for thread "${threadID}". Facebook returned no data.`
-                                        });
+                                        threadInfo = {
+                                                threadName: null,
+                                                userInfo: [],
+                                                adminIDs: [],
+                                                nicknames: {},
+                                                emoji: null,
+                                                imageSrc: null,
+                                                approvalMode: false,
+                                                threadTheme: null,
+                                                threadType: 2
+                                        };
                                 }
                                 const { threadName, userInfo, adminIDs } = threadInfo;
-                                const newAdminsIDs = adminIDs.reduce(function (_, b) {
-                                        _.push(b.id);
+                                const newAdminsIDs = (adminIDs || []).reduce(function (_, b) {
+                                        _.push(b.id || b);
                                         return _;
                                 }, []);
 
-                                const newMembers = userInfo.reduce(function (arr, user) {
+                                const newMembers = (userInfo || []).reduce(function (arr, user) {
                                         const userID = user.id;
                                         arr.push({
                                                 userID,
                                                 name: user.name,
                                                 gender: user.gender,
-                                                nickname: threadInfo.nicknames[userID] || null,
+                                                nickname: (threadInfo.nicknames || {})[userID] || null,
                                                 inGroup: true,
                                                 count: 0,
                                                 permissionConfigDashboard: false
@@ -225,7 +232,7 @@ module.exports = async function (databaseType, threadModel, api, fakeGraphql) {
                                         emoji: threadInfo.emoji,
                                         adminIDs: newAdminsIDs,
                                         imageSrc: threadInfo.imageSrc,
-                                        approvalMode: threadInfo.approvalMode,
+                                        approvalMode: threadInfo.approvalMode || false,
                                         members: newMembers,
                                         banned: {},
                                         settings: {
