@@ -8,7 +8,7 @@ module.exports = {
   config: {
     name: "nam",
     aliases: ["1", "renameall"],
-    version: "5.0",
+    version: "5.1",
     author: "Hanji & ShAn",
     role: 2,
     shortDescription: "السيطرة الكاملة على الكنيات",
@@ -20,10 +20,10 @@ module.exports = {
         + "{pn} under del       — تثبيت فراغ للكل\n"
         + "{pn} stop/off        — إيقاف وضع Under\n"
         + "──────────────────────\n"
-        + "رد على رسالة + {pn} [اسم]   — تغيير كنية شخص محدد\n"
-        + "رد على رسالة + {pn} del      — حذف كنية شخص محدد\n"
+        + "رد على رسالة + {pn} [اسم]      — تغيير كنية شخص محدد\n"
+        + "رد على رسالة + {pn} del         — حذف كنية شخص محدد\n"
         + "رد على رسالة + {pn} lock [اسم] — تثبيت كنية شخص (لا يمكن تغييرها)\n"
-        + "رد على رسالة + {pn} unlock   — فك تثبيت كنية شخص"
+        + "رد على رسالة + {pn} unlock      — فك تثبيت كنية شخص"
     }
   },
 
@@ -44,6 +44,26 @@ module.exports = {
       return api.setMessageReaction("✅", messageID, () => {}, true);
     }
 
+    // ─── [ أوامر تحتاج رد — بدون رد ترفض ] ───
+    if (
+      inputLower === "lock" ||
+      inputLower.startsWith("lock ") ||
+      inputLower === "ثبت" ||
+      inputLower.startsWith("ثبت ") ||
+      inputLower === "unlock" ||
+      inputLower === "فك" ||
+      inputLower === "الغاء"
+    ) {
+      if (!messageReply) {
+        return message.reply(
+          "⚠️ هذا الأمر يحتاج رد على رسالة شخص محدد.\n"
+          + "كيفية الاستخدام:\n"
+          + "• ارد على رسالة الشخص + .nam lock [اسم]\n"
+          + "• ارد على رسالة الشخص + .nam unlock"
+        );
+      }
+    }
+
     // ─── [ رد على شخص محدد ] ───
     if (messageReply) {
       const targetUserID = messageReply.senderID;
@@ -54,8 +74,11 @@ module.exports = {
         return api.setMessageReaction("🔓", messageID, () => {}, true);
       }
 
-      if (inputLower.startsWith("lock") || inputLower.startsWith("ثبت")) {
-        const lockName = input.slice(inputLower.startsWith("lock") ? 4 : 3).trim();
+      if (inputLower === "lock" || inputLower.startsWith("lock ") ||
+          inputLower === "ثبت" || inputLower.startsWith("ثبت ")) {
+        const lockName = input.slice(
+          inputLower.startsWith("lock") ? 4 : inputLower.startsWith("ثبت") ? 3 : 0
+        ).trim();
         global.zypherLocks[lockKey] = lockName;
         await api.changeNickname(lockName, threadID, targetUserID).catch(() => {});
         return api.setMessageReaction("🔒", messageID, () => {}, true);
@@ -74,12 +97,12 @@ module.exports = {
     if (inputLower === "del" || inputLower === "حذف") {
       targetName = "";
       isDeleteMode = true;
-    } else if (inputLower.startsWith("under ")) {
+    } else if (inputLower.startsWith("under ") || inputLower === "under") {
       isUnderMode = true;
-      const subInput = input.slice(6).trim();
-      if (subInput.toLowerCase() === "del") {
+      const subInput = input.slice(5).trim();
+      if (subInput.toLowerCase() === "del" || subInput === "") {
         targetName = "";
-        isDeleteMode = true;
+        isDeleteMode = subInput.toLowerCase() === "del";
       } else {
         targetName = subInput;
       }
@@ -90,8 +113,9 @@ module.exports = {
     try {
       async function massRename() {
         const threadInfo = await api.getThreadInfo(threadID);
+        if (!threadInfo) return;
         const currentNicknames = threadInfo.nicknames || {};
-        const participantIDs = threadInfo.participantIDs;
+        const participantIDs = threadInfo.participantIDs || [];
 
         const membersToChange = participantIDs.filter(id => {
           if (id === senderID) return false;
