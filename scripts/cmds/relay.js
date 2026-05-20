@@ -2,19 +2,19 @@ module.exports = {
   config: {
     name: "relay",
     aliases: ["crosscmd", "رلاي"],
-    version: "2.0",
+    version: "2.1",
     author: "ShAn",
     countDown: 3,
     role: 2,
     category: "system",
-    shortDescription: { en: "Run a command in another group interactively" },
+    shortDescription: { en: "Run a command in another group" },
     guide: {
       en: "{pn} list [صفحة]   — اختر قروب بشكل تفاعلي\n"
         + "{pn} <ID> <أمر>    — تنفيذ مباشر"
     }
   },
 
-  onStart: async function ({ api, message, args, event, threadsData, usersData }) {
+  onStart: async function ({ api, message, args, event, threadsData }) {
     const { senderID } = event;
 
     if (!args[0]) {
@@ -31,42 +31,58 @@ module.exports = {
     }
 
     if (args[0].toLowerCase() === "list") {
-      const allThreads = global.db.allThreadData.filter(t => t.isGroup !== false);
+      // ─── نستخدم allThreadData مع فلترة المجموعات فقط ───
+      const allThreads = global.db.allThreadData.filter(t => {
+        // نحتفظ فقط بالمجموعات (تجاهل المحادثات الفردية)
+        if (t.isGroup === false) return false;
+        // المحادثات الفردية عادةً threadID بدون ":0"
+        if (typeof t.threadID === "string" && t.threadID.includes(":")) return false;
+        return true;
+      });
+
       if (!allThreads.length)
-        return message.reply("❌ لا توجد مجموعات مسجلة في قاعدة البيانات.");
+        return message.reply("❌ لا توجد مجموعات مسجلة بعد. تحدث مع البوت في قروب أولاً.");
 
       const page = Math.max(1, parseInt(args[1]) || 1);
-      const start = (page - 1) * 10;
-      const slice = allThreads.slice(start, start + 10);
-      const totalPages = Math.ceil(allThreads.length / 10);
+      const PAGE_SIZE = 10;
+      const start = (page - 1) * PAGE_SIZE;
+      const slice = allThreads.slice(start, start + PAGE_SIZE);
+      const totalPages = Math.ceil(allThreads.length / PAGE_SIZE);
 
       if (!slice.length)
         return message.reply(`❌ لا توجد مجموعات في الصفحة ${page}.`);
 
-      const lines = slice.map((t, i) =>
-        `${start + i + 1}. ${t.threadName || "بدون اسم"}`
-      );
+      // ─── نعرض الاسم + ID اختصاراً للتحقق ───
+      const lines = slice.map((t, i) => {
+        const name = t.threadName || t.data?.threadName || "بدون اسم";
+        const shortID = String(t.threadID).slice(-6);
+        return `${start + i + 1}. ${name} (...${shortID})`;
+      });
 
-      let text = "📋 قائمة المجموعات — اختر رقماً:\n"
-        + "━━━━━━━━━━━━━━━━━━━\n"
+      let text = `📋 قائمة المجموعات — ارد برقم:\n`
+        + `━━━━━━━━━━━━━━━━━━━\n`
         + lines.join("\n")
-        + "\n━━━━━━━━━━━━━━━━━━━";
+        + `\n━━━━━━━━━━━━━━━━━━━`;
 
       if (totalPages > 1)
-        text += `\nصفحة ${page}/${totalPages}`;
+        text += `\n📄 صفحة ${page}/${totalPages}`;
       if (page < totalPages)
         text += ` | .relay list ${page + 1} للتالية`;
 
-      text += "\n\n↩️ ارد على هذه الرسالة برقم المجموعة";
+      text += `\n\n↩️ ارد على هذه الرسالة برقم المجموعة`;
 
       const sent = await message.reply(text);
-      if (!sent?.messageID) return;
+      const sentID = sent?.messageID || sent?.messageId;
+      if (!sentID) return;
 
-      global.GoatBot.onReply.set(sent.messageID, {
+      global.GoatBot.onReply.set(sentID, {
         commandName: "relay",
         author: senderID,
         type: "selectGroup",
-        groups: slice,
+        groups: slice.map(t => ({
+          threadID: t.threadID,
+          threadName: t.threadName || t.data?.threadName || "بدون اسم"
+        })),
         startIndex: start
       });
       return;
@@ -81,51 +97,53 @@ module.exports = {
       return message.reply("❌ ID المجموعة يجب أن يكون رقماً.");
 
     if (!commandInput)
-      return message.reply("❌ يجب تحديد اسم الأمر.");
+      return message.reply("❌ يجب تحديد اسم الأمر بعد الـ ID.");
 
-    return executeInThread({ api, message, event, threadsData, usersData, targetThreadID, commandInput, cmdArgs });
+    return executeInThread({ api, message, event, targetThreadID, commandInput, cmdArgs });
   },
 
-  onReply: async function ({ api, message, event, Reply, threadsData, usersData }) {
+  onReply: async function ({ api, message, event, Reply }) {
     const { senderID, body } = event;
-    if (!body) return;
+    if (!body?.trim()) return;
     if (Reply.author !== senderID) return;
 
     // ─── المرحلة 1: اختيار رقم المجموعة ───
     if (Reply.type === "selectGroup") {
       const num = parseInt(body.trim());
+
       if (isNaN(num) || num < 1) {
         const sent = await message.reply("❌ ارد برقم صحيح من القائمة.");
-        if (!sent?.messageID) return;
-        global.GoatBot.onReply.set(sent.messageID, { ...Reply });
+        const sentID = sent?.messageID || sent?.messageId;
+        if (sentID) global.GoatBot.onReply.set(sentID, { ...Reply });
         return;
       }
 
       const localIndex = num - 1 - Reply.startIndex;
       if (localIndex < 0 || localIndex >= Reply.groups.length) {
         const sent = await message.reply(`❌ الرقم ${num} غير موجود في هذه الصفحة.`);
-        if (!sent?.messageID) return;
-        global.GoatBot.onReply.set(sent.messageID, { ...Reply });
+        const sentID = sent?.messageID || sent?.messageId;
+        if (sentID) global.GoatBot.onReply.set(sentID, { ...Reply });
         return;
       }
 
       const selectedGroup = Reply.groups[localIndex];
 
       const sent = await message.reply(
-        `✅ تم اختيار المجموعة:\n`
-        + `🏷️ ${selectedGroup.threadName || "بدون اسم"}\n`
+        `✅ تم اختيار:\n`
+        + `🏷️ ${selectedGroup.threadName}\n`
         + `🆔 ${selectedGroup.threadID}\n\n`
         + `↩️ ارد بالأمر الذي تريد تشغيله\n`
         + `مثال: .nam under del`
       );
-      if (!sent?.messageID) return;
+      const sentID = sent?.messageID || sent?.messageId;
+      if (!sentID) return;
 
-      global.GoatBot.onReply.set(sent.messageID, {
+      global.GoatBot.onReply.set(sentID, {
         commandName: "relay",
         author: senderID,
         type: "selectCommand",
         targetThreadID: selectedGroup.threadID,
-        targetThreadName: selectedGroup.threadName || "بدون اسم"
+        targetThreadName: selectedGroup.threadName
       });
       return;
     }
@@ -143,17 +161,21 @@ module.exports = {
       const cmdArgs      = parts.slice(1);
 
       if (!commandInput)
-        return message.reply("❌ لم يتم إدخال أمر. ارد مرة أخرى.");
+        return message.reply("❌ ما كتبت أمراً. ارد مرة أخرى.");
 
       return executeInThread({
-        api, message, event, threadsData, usersData,
-        targetThreadID, commandInput, cmdArgs
+        api, message, event,
+        targetThreadID,
+        targetThreadName,
+        commandInput,
+        cmdArgs
       });
     }
   }
 };
 
-async function executeInThread({ api, message, event, threadsData, usersData, targetThreadID, commandInput, cmdArgs }) {
+// ═══════════════════════════════════════════════════
+async function executeInThread({ api, message, event, targetThreadID, targetThreadName, commandInput, cmdArgs }) {
   const { commands, aliases } = global.GoatBot;
   const { getPrefix } = global.utils;
   const { senderID } = event;
@@ -162,33 +184,36 @@ async function executeInThread({ api, message, event, threadsData, usersData, ta
   if (!command)
     return message.reply(`❌ الأمر "${commandInput}" غير موجود.`);
 
+  // ─── جلب بيانات القروب الهدف ───
   const targetThread = global.db.allThreadData.find(t => t.threadID == targetThreadID);
   if (!targetThread)
-    return message.reply(`❌ المجموعة ${targetThreadID} غير موجودة في قاعدة البيانات.`);
+    return message.reply(`❌ المجموعة ${targetThreadID} غير موجودة في قاعدة البيانات.\nجرب تكتب أمراً في ذلك القروب أولاً.`);
 
-  const prefix   = getPrefix(targetThreadID);
-  const langCode = targetThread.data?.lang || global.GoatBot.config.language || "en";
+  const displayName = targetThreadName || targetThread.threadName || targetThread.data?.threadName || targetThreadID;
+  const prefix      = getPrefix(targetThreadID);
+  const langCode    = targetThread.data?.lang || global.GoatBot.config.language || "en";
 
   const fakeEvent = {
     ...event,
     threadID: targetThreadID,
     body: prefix + commandInput + (cmdArgs.length ? " " + cmdArgs.join(" ") : ""),
     isGroup: true,
-    senderID
+    senderID,
+    messageReply: undefined
   };
 
   const fakeMessage = global.utils.message(api, fakeEvent);
 
   let targetThreadData;
   try {
-    targetThreadData = await threadsData.get(targetThreadID);
-  } catch (e) {
+    targetThreadData = await global.db.threadsData.get(targetThreadID);
+  } catch {
     return message.reply("❌ تعذّر جلب بيانات المجموعة الهدف.");
   }
 
   const role = (() => {
     if (global.GoatBot.config.adminBot.includes(senderID)) return 2;
-    if ((targetThreadData.adminIDs || []).includes(senderID)) return 1;
+    if ((targetThreadData?.adminIDs || []).includes(senderID)) return 1;
     return 0;
   })();
 
@@ -201,13 +226,13 @@ async function executeInThread({ api, message, event, threadsData, usersData, ta
     prefix,
     role,
     langCode,
-    threadsData,
-    usersData,
+    threadsData: global.db.threadsData,
+    usersData:   global.db.usersData,
     threadModel: global.db.threadModel,
     userModel:   global.db.userModel,
-    envCommands: global.GoatBot.configCommands.envCommands || {},
-    envEvents:   global.GoatBot.configCommands.envEvents   || {},
-    envGlobal:   global.GoatBot.configCommands.envGlobal   || {},
+    envCommands: global.GoatBot.configCommands?.envCommands || {},
+    envEvents:   global.GoatBot.configCommands?.envEvents   || {},
+    envGlobal:   global.GoatBot.configCommands?.envGlobal   || {},
     getLang: (key, ...a) => {
       let lang = command.langs?.[langCode]?.[key] || "";
       for (let i = a.length - 1; i >= 0; i--)
@@ -218,12 +243,12 @@ async function executeInThread({ api, message, event, threadsData, usersData, ta
 
   await message.reply(
     `📡 تنفيذ الأمر "${command.config.name}" في:\n`
-    + `🏷️ ${targetThread.threadName || targetThreadID}`
+    + `🏷️ ${displayName}`
   );
 
   try {
     await command.onStart(parameters);
   } catch (err) {
-    return message.reply(`❌ خطأ: ${err.message || err}`);
+    return message.reply(`❌ خطأ أثناء التنفيذ: ${err.message || err}`);
   }
 }
