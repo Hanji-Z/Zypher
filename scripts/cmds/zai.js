@@ -134,6 +134,48 @@ module.exports = {
     }
   },
 
+  // ─── يرد تلقائياً لما يذكروا اسمه في أي رسالة ───
+  onChat: async function ({ api, event }) {
+    const { threadID, senderID, body, messageID } = event;
+    if (!body) return;
+
+    const botID = String(api.getCurrentUserID());
+    if (String(senderID) === botID) return;
+
+    // كلمات تشغّل الرد
+    const triggers = /زيفر|zypher/i;
+    if (!triggers.test(body)) return;
+
+    const adminBot = global.GoatBot?.config?.adminBot || [];
+    const isOwner  = adminBot.includes(String(senderID));
+
+    const histKey = `${threadID}_${senderID}`;
+    if (!global.zaiHistory[histKey]) global.zaiHistory[histKey] = [];
+
+    let senderName = "صاحبي";
+    try {
+      const info = await api.getUserInfo(senderID);
+      senderName = info?.[senderID]?.name || "صاحبي";
+    } catch {}
+
+    api.setMessageReaction("⏳", messageID, () => {}, true);
+
+    const messages = [
+      ...global.zaiHistory[histKey].slice(-MAX_HISTORY),
+      { role: "user", content: body.trim() }
+    ];
+
+    try {
+      const reply = await callAI(messages, buildSystem(isOwner, senderName));
+      saveHistory(histKey, body.trim(), reply);
+      api.setMessageReaction("✅", messageID, () => {}, true);
+      await sendAndRegister({ api, threadID, replyToID: messageID, text: reply, senderID, histKey, isOwner });
+    } catch (err) {
+      console.error("❌ zai onChat:", err.message);
+      api.setMessageReaction("❌", messageID, () => {}, true);
+    }
+  },
+
   onReply: async function ({ api, event, Reply }) {
     const { threadID, senderID, body, messageID } = event;
     if (Reply.author !== String(senderID)) return;
