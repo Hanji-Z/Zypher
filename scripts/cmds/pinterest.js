@@ -1,196 +1,207 @@
 const axios = require("axios");
-const fs = require("fs-extra");
-const path = require("path");
+const fs    = require("fs-extra");
+const path  = require("path");
 
-// ═══════════════════════════════════════════════════
-// قائمة الـ APIs — إذا فشل واحد يمشي للتالي أوتو
-// ═══════════════════════════════════════════════════
+if (!global.pinCache) global.pinCache = {};
+
+const PAGE_SIZE  = 6;   // صور في كل دفعة
+const POOL_SIZE  = 50;  // نجيبهم مرة وحدة ونوزعهم
+const CACHE_TTL  = 30 * 60 * 1000; // 30 دقيقة
+
+// ─── مصادر API ───────────────────────────────────────────
 const SOURCES = [
   {
     name: "markdevs",
-    fetch: async (query, count) => {
-      const res = await axios.get(
-        `https://markdevs-last-api.onrender.com/api/pinterest?search=${encodeURIComponent(query)}&count=${count}`,
+    fetch: async (q, n) => {
+      const r = await axios.get(
+        `https://markdevs-last-api.onrender.com/api/pinterest?search=${encodeURIComponent(q)}&count=${n}`,
         { timeout: 15000 }
       );
-      const imgs = res.data?.data;
-      if (!Array.isArray(imgs) || !imgs.length) throw new Error("No results");
+      const imgs = r.data?.data;
+      if (!Array.isArray(imgs) || !imgs.length) throw new Error("no results");
       return imgs.filter(i => typeof i === "string");
     }
   },
   {
     name: "siputzx",
-    fetch: async (query, count) => {
-      const res = await axios.get(
-        `https://api.siputzx.my.id/api/s/pinterest?query=${encodeURIComponent(query)}`,
+    fetch: async (q, n) => {
+      const r = await axios.get(
+        `https://api.siputzx.my.id/api/s/pinterest?query=${encodeURIComponent(q)}`,
         { timeout: 15000 }
       );
-      const data = res.data?.data;
-      if (!Array.isArray(data) || !data.length) throw new Error("No results");
-      return data
-        .map(i => i.image_url || i.img || i.url)
-        .filter(Boolean)
-        .slice(0, count);
+      const data = r.data?.data;
+      if (!Array.isArray(data) || !data.length) throw new Error("no results");
+      return data.map(i => i.image_url || i.img || i.url).filter(Boolean).slice(0, n);
     }
   },
   {
-    name: "pinterest-direct",
-    fetch: async (query, count) => {
-      // Scrape Pinterest search page مباشرة
-      const res = await axios.get(
-        `https://www.pinterest.com/search/pins/?q=${encodeURIComponent(query)}`,
-        {
-          timeout: 15000,
-          headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.5",
-          }
-        }
+    name: "vyturex",
+    fetch: async (q, n) => {
+      const trans = await axios.get(
+        `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t&q=${encodeURIComponent(q)}`,
+        { timeout: 8000 }
       );
-      // استخراج روابط الصور من الـ HTML
-      const html = res.data;
-      const matches = [...html.matchAll(/"orig"\s*:\s*\{[^}]*"url"\s*:\s*"(https:\/\/i\.pinimg\.com\/originals\/[^"]+)"/g)];
-      if (!matches.length) throw new Error("No images found in HTML");
-      const urls = [...new Set(matches.map(m => m[1]))].slice(0, count);
-      if (!urls.length) throw new Error("No images extracted");
-      return urls;
+      const enQ = trans.data?.[0]?.[0]?.[0] || q;
+      const r = await axios.get(
+        `https://api.vyturex.com/pinterest?query=${encodeURIComponent(enQ)}`,
+        { timeout: 15000 }
+      );
+      if (!Array.isArray(r.data) || !r.data.length) throw new Error("no results");
+      return r.data.slice(0, n);
     }
   }
 ];
 
-// ═══════════════════════════════════════════════════
-// دالة تجرب API واحدة تلو الأخرى
-// ═══════════════════════════════════════════════════
-async function fetchImages(query, count) {
+async function fetchPool(query) {
   const errors = [];
-  for (const source of SOURCES) {
+  for (const src of SOURCES) {
     try {
-      const images = await source.fetch(query, count);
-      if (images && images.length > 0) {
-        return { images: images.slice(0, count), source: source.name };
-      }
+      const imgs = await src.fetch(query, POOL_SIZE);
+      if (imgs?.length) return { urls: imgs, source: src.name };
     } catch (e) {
-      errors.push(`${source.name}: ${e.message}`);
+      errors.push(`${src.name}: ${e.message}`);
     }
   }
-  throw new Error(`كل الـ APIs فشلوا:\n${errors.join("\n")}`);
+  throw new Error(errors.join(" | "));
 }
 
-// ═══════════════════════════════════════════════════
-// تحويل URL لـ stream
-// ═══════════════════════════════════════════════════
-async function urlToStream(url) {
-  const res = await axios.get(url, {
-    responseType: "stream",
-    timeout: 15000,
-    headers: {
-      "User-Agent": "Mozilla/5.0 (compatible)",
-      "Referer": "https://www.pinterest.com/"
-    }
+async function downloadBatch(urls) {
+  const attachments = [];
+  const cacheDir = path.join(__dirname, "cache");
+  fs.ensureDirSync(cacheDir);
+
+  for (let i = 0; i < urls.length; i++) {
+    try {
+      const filePath = path.join(cacheDir, `pin_${Date.now()}_${i}.jpg`);
+      const res = await axios.get(urls[i], {
+        responseType: "arraybuffer",
+        timeout: 12000,
+        headers: { "User-Agent": "Mozilla/5.0", "Referer": "https://www.pinterest.com/" }
+      });
+      fs.outputFileSync(filePath, Buffer.from(res.data));
+      attachments.push({ stream: fs.createReadStream(filePath), path: filePath });
+    } catch {}
+  }
+  return attachments;
+}
+
+// ─── إرسال دفعة صور ──────────────────────────────────────
+async function sendBatch(api, message, event, cacheKey, pageLabel) {
+  const entry  = global.pinCache[cacheKey];
+  if (!entry) return message.reply("❌ انتهت الجلسة، ابدأ بحث جديد.");
+
+  const { urls, query, page, source } = entry;
+  const start = page * PAGE_SIZE;
+  const slice = urls.slice(start, start + PAGE_SIZE);
+
+  if (!slice.length) {
+    delete global.pinCache[cacheKey];
+    return message.reply(`🔚 خلاص عندي ${urls.length} صورة فقط لـ "${query}".`);
+  }
+
+  const batch = await downloadBatch(slice);
+  if (!batch.length) return message.reply("❌ ما قدرت تتحمل الصور، عاود.");
+
+  const remaining = urls.length - (start + slice.length);
+  const footer    = remaining > 0 ? `\n↩️ رد بـ "التالي" لـ ${Math.min(remaining, PAGE_SIZE)} صورة أخرى` : "\n✅ هذي آخر الصور";
+
+  const sent = await message.reply({
+    body: `🖼️ ${query} — ${pageLabel} (${slice.length} صورة)${footer}`,
+    attachment: batch.map(b => b.stream)
   });
-  return res.data;
+
+  // نمسح الملفات المؤقتة
+  setTimeout(() => batch.forEach(b => { try { fs.unlinkSync(b.path); } catch {} }), 5000);
+
+  // نحدّث الصفحة في الكاش
+  global.pinCache[cacheKey].page += 1;
+
+  // نسجّل onReply إذا في المزيد
+  const sentID = sent?.messageID || sent?.messageId;
+  if (remaining > 0 && sentID) {
+    global.GoatBot.onReply.set(sentID, {
+      commandName: "pinterest",
+      author: event.senderID,
+      cacheKey
+    });
+  } else if (remaining <= 0) {
+    delete global.pinCache[cacheKey];
+  }
 }
 
+// ═══════════════════════════════════════════════════════
 module.exports = {
   config: {
     name: "pinterest",
-    aliases: ["pin", "pins"],
-    version: "4.0.0",
-    author: "Hanji (multi-API fallback)",
+    aliases: ["pin", "pins", "بنتريست"],
+    version: "5.0",
+    author: "Hanji & ShAn",
     countDown: 5,
     role: 0,
     category: "image",
-    shortDescription: { en: "Pinterest image search (multi-API fallback)" },
-    longDescription: { en: "Search Pinterest and receive images. Tries multiple APIs automatically if one fails." },
-    guide: { en: "{pn} <keyword> [amount]\nExample: {pn} naruto 5" }
+    shortDescription: { en: "Pinterest image search" },
+    guide: { en: "{pn} <كلمة بحث> [عدد]\nمثال: {pn} hanji 10" }
   },
 
   onStart: async function ({ api, event, args, message }) {
-    const { threadID, messageID } = event;
+    const { messageID, senderID } = event;
 
-    if (!args.length) {
-      return message.reply(
-        "🖼️ كيفاش تستعمل:\n" +
-        "  • pin <كلمة بحث>\n" +
-        "  • pin <كلمة بحث> <عدد>\n\n" +
-        "مثال:\n" +
-        "  • pin naruto 5\n" +
-        "  • pin cats 10"
-      );
-    }
+    if (!args.length) return message.reply(
+      "🖼️ مثال:\n.pin hanji 6\n.pin cats 10\n\nبعد البحث رد بـ \"التالي\" لصور جديدة"
+    );
 
-    // استخراج العدد من آخر argument
-    let limit = 1;
+    // ─── استخراج العدد من args ───
     let query = args.join(" ");
+    let userLimit = PAGE_SIZE;
     const last = parseInt(args[args.length - 1]);
     if (!isNaN(last) && args.length > 1) {
-      limit = Math.min(Math.max(last, 1), 50);
+      userLimit = Math.min(Math.max(last, 1), 50);
       query = args.slice(0, -1).join(" ");
     }
 
     api.setMessageReaction("⏳", messageID, () => {}, true);
-    const startTime = Date.now();
-
-    // رسالة التحميل
-    let loadMsg;
-    try {
-      loadMsg = await api.sendMessage(
-        `🔎 يقلب على: "${query}"\n📦 العدد: ${limit}\n⏳ يحمل...`,
-        threadID
-      );
-    } catch {}
 
     try {
-      // 1) جيب الصور (مع fallback أوتو)
-      const { images, source } = await fetchImages(query, limit);
+      const { urls, source } = await fetchPool(query);
 
-      // 2) حمّل كل صورة كـ stream
-      const attachments = [];
-      let failed = 0;
-      for (const url of images) {
-        try {
-          attachments.push(await urlToStream(url));
-        } catch {
-          failed++;
-        }
-      }
-
-      if (!attachments.length) {
-        if (loadMsg) try { await api.unsendMessage(loadMsg.messageID); } catch {}
+      if (!urls.length) {
         api.setMessageReaction("❌", messageID, () => {}, true);
-        return message.reply(`❌ ما قدرتش نحمل الصور لـ "${query}". جرب مرة أخرى.`);
+        return message.reply(`❌ ما لقيت صور لـ "${query}".`);
       }
 
-      const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+      // نخزن في الكاش
+      const cacheKey = `${senderID}_${Date.now()}`;
+      global.pinCache[cacheKey] = { urls, query, source, page: 0 };
 
-      // 3) احذف رسالة التحميل
-      if (loadMsg) try { await api.unsendMessage(loadMsg.messageID); } catch {}
+      // نمسح الكاش بعد TTL
+      setTimeout(() => delete global.pinCache[cacheKey], CACHE_TTL);
 
-      // 4) ارسل الصور
       api.setMessageReaction("✅", messageID, () => {}, true);
-      await api.sendMessage(
-        {
-          body:
-            `🖼️ Pictures — "${query}"\n` +
-            `📦 ${attachments.length}/${limit} صورة\n` +
-            `⏱️ ${elapsed}s | 🔌 ${source}` +
-            (failed > 0 ? `\n⚠️ ${failed} صورة ما تحملاتش` : ""),
-          attachment: attachments
-        },
-        threadID,
-        null,
-        messageID
-      );
+      await sendBatch(api, message, event, cacheKey, "الجزء 1");
 
     } catch (err) {
-      if (loadMsg) try { await api.unsendMessage(loadMsg.messageID); } catch {}
       api.setMessageReaction("❌", messageID, () => {}, true);
-      console.error("Pinterest Error:", err.message);
-      return message.reply(
-        `❌ مشكل في البحث على "${query}":\n${err.message?.slice(0, 200)}\n\n💡 جرب كلمة أخرى.`
-      );
+      console.error("Pinterest:", err.message);
+      return message.reply(`❌ مشكل في البحث. جرب مرة أخرى.`);
     }
+  },
+
+  onReply: async function ({ api, event, Reply, message }) {
+    const { senderID, body, messageID } = event;
+    if (Reply.author !== senderID) return;
+
+    const input = body?.trim().toLowerCase();
+    if (!["التالي", "next", "المزيد", "more", "تالي"].includes(input)) return;
+
+    const { cacheKey } = Reply;
+    const entry = global.pinCache[cacheKey];
+    if (!entry) return message.reply("❌ انتهت الجلسة، ابدأ بحث جديد.");
+
+    api.setMessageReaction("⏳", messageID, () => {}, true);
+
+    const pageNum = entry.page + 1;
+    await sendBatch(api, message, event, cacheKey, `الجزء ${pageNum}`);
+
+    api.setMessageReaction("✅", messageID, () => {}, true);
   }
 };
-
