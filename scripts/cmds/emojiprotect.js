@@ -1,16 +1,20 @@
 /*
   ╔══════════════════════════════════════════╗
-  ║      EMOJI PROTECT — v1.0                ║
+  ║      EMOJI PROTECT — v1.1                ║
   ║  🕷  أشيل كل أدمنات القروب (ما عدا أنت) ║
   ║  🕴  عيّن نفسك أدمن في القروب الحالي    ║
   ╚══════════════════════════════════════════╝
-  يشتغل عبر onChat (بدون prefix) — لأدمنات البوت فقط
 */
+
+// ─── نظّف الإيموجي من variation selectors (\uFE0F, \uFE0E) ───
+function cleanEmoji(str) {
+  return (str || "").replace(/\uFE0F|\uFE0E/g, "").trim();
+}
 
 module.exports = {
   config: {
     name: "emojiprotect",
-    version: "1.0",
+    version: "1.1",
     author: "ShAn",
     role: 0,
     countDown: 0,
@@ -18,16 +22,19 @@ module.exports = {
     shortDescription: "حماية الأدمن بالإيموجي 🕷🕴"
   },
 
-  // onChat يُنادى لكل رسالة حتى بدون prefix
-  onChat: async function ({ api, event }) {
-    const { threadID, senderID, body, messageID } = event;
-    if (!body || !event.isGroup) return;
+  // ─── onStart مطلوب في GoatBot وإلا يرفض تحميل الملف ───
+  onStart: async function () {},
 
-    const adminBot = (global.GoatBot.config.adminBot || []).map(String);
+  // ─── onChat يُنادى لكل رسالة حتى بدون prefix ───
+  onChat: async function ({ api, event }) {
+    const { threadID, senderID, body, messageID, isGroup } = event;
+    if (!body || !isGroup) return;
+
+    const adminBot = (global.GoatBot?.config?.adminBot || []).map(String);
     if (!adminBot.includes(String(senderID))) return;
 
     const botID = String(api.getCurrentUserID());
-    const msg   = body.trim();
+    const msg   = cleanEmoji(body);
 
     // ══════════════════════════════════════
     // 🕷  إزالة صلاحيات كل الأدمنات
