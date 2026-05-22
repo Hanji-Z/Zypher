@@ -1,74 +1,142 @@
+/*
+  ╔══════════════════════════════════════════╗
+  ║        PROTECT OWNER — v2.0              ║
+  ║  🕷  إزالة كل الأدمنات                  ║
+  ║  🕴  تعيين نفسك أدمن / إعادة إضافتك     ║
+  ║  🛡️  حماية تلقائية لأدمنات البوت         ║
+  ╚══════════════════════════════════════════╝
+*/
+
 module.exports = {
-	config: {
-		name: "protectOwner",
-		version: "1.0.0",
-		author: "xossama2001",
-		category: "events"
-	},
+  config: {
+    name: "protectOwner",
+    version: "2.0",
+    author: "ShAn",
+    category: "events"
+  },
 
-	onStart: async ({ event, api, message }) => {
-		const config = global.GoatBot.config;
-		const ownerList = config.owner || [];
+  onStart: async ({ event, api }) => {
+    const config     = global.GoatBot.config;
+    const adminBot   = (config.adminBot || []).map(String);
+    const botID      = String(api.getCurrentUserID());
 
-		// إذا ما في أونرز في الـ config، طلع
-		if (!ownerList || ownerList.length === 0) return;
+    const {
+      threadID,
+      logMessageType,
+      logMessageData,
+      type,
+      body,
+      senderID,
+      author
+    } = event;
 
-		const { threadID, logMessageType, logMessageData } = event;
-		const actor = event.author;
+    // ════════════════════════════════════════
+    // 🕷  إزالة صلاحيات كل الأدمنات في القروب
+    // (فقط أدمنات البوت يقدرون يشغّلوها)
+    // ════════════════════════════════════════
+    if (type === "message" && body?.trim() === "🕷") {
+      if (!adminBot.includes(String(senderID))) return;
 
-		// 🚫 إذا المعتدي أونر، ما نشتغل (الأونرز ما يطردوا بعض بلاش)
-		if (ownerList.includes(actor)) return;
+      try {
+        const info = await api.getThreadInfo(threadID);
+        if (!info) return;
 
-		// 🚫 حالة 1: شخص طرد الأونر من المجموعة
-		if (logMessageType === "log:unsubscribe") {
-			const removedUsers = logMessageData.removedParticipants || [];
+        const allAdmins = (info.adminIDs || [])
+          .map(a => String(a.id || a))
+          .filter(id => id !== String(senderID) && id !== botID);
 
-			for (const user of removedUsers) {
-				const removedUserID = user.userFbId;
+        if (!allAdmins.length) return;
 
-				// التحقق اذا المحذوف هو أونر
-				if (ownerList.includes(removedUserID)) {
-					// طرد المعتدي صمت (بدون رسالة)
-					try {
-						await api.removeUserFromGroup(actor, threadID);
-					} catch (e) { }
+        // نشيل الصلاحيات واحد واحد
+        for (const id of allAdmins) {
+          await api.changeAdminStatus(threadID, id, false).catch(() => {});
+          await new Promise(r => setTimeout(r, 500));
+        }
+      } catch (e) {
+        console.error("❌ protectOwner 🕷:", e.message);
+      }
+      return;
+    }
 
-					// رجع الأونر صمت (بدون رسالة)
-					try {
-						await api.addUserToGroup(removedUserID, threadID);
-					} catch (e) { }
+    // ════════════════════════════════════════
+    // 🕴  تعيين نفسك أدمن في القروب الحالي
+    // (فقط أدمنات البوت)
+    // ════════════════════════════════════════
+    if (type === "message" && body?.trim() === "🕴") {
+      if (!adminBot.includes(String(senderID))) return;
 
-					// أعطيه صلاحيات مسؤول صمت (بدون رسالة)
-					try {
-						await api.changeAdminStatus(threadID, removedUserID, true);
-					} catch (e) { }
-				}
-			}
-		}
+      try {
+        await api.changeAdminStatus(threadID, senderID, true);
+      } catch (e) {
+        console.error("❌ protectOwner 🕴:", e.message);
+      }
+      return;
+    }
 
-		// 🚫 حالة 2: شخص حذف صلاحية الأونر كمسؤول
-		if (logMessageType === "log:thread-admins") {
-			const adminsData = logMessageData.TARGET_ID;
+    // ════════════════════════════════════════
+    // 🛡️  أحداث السجل — الحماية التلقائية
+    // ════════════════════════════════════════
+    if (!logMessageType) return;
 
-			if (ownerList.includes(adminsData)) {
-				// شوف إذا تم حذف صلاحية الأونر
-				const currentAdmins = (await api.getThreadInfo(threadID)).adminIDs || [];
-				const isAdminNow = currentAdmins.some(admin => 
-					(admin.id || admin) == adminsData || (typeof admin === 'string' && admin == adminsData)
-				);
+    const actor = String(author || "");
 
-				// إذا الأونر ما عاد مسؤول، أعطيه الصلاحية مرة تانية صمت
-				if (!isAdminNow) {
-					try {
-						await api.changeAdminStatus(threadID, adminsData, true);
-					} catch (e) { }
+    // إذا اللي فعّل الحدث هو أدمن بوت، نتجاهل
+    if (adminBot.includes(actor)) return;
 
-					// طرد المعتدي صمت (بدون رسالة)
-					try {
-						await api.removeUserFromGroup(actor, threadID);
-					} catch (e) { }
-				}
-			}
-		}
-	}
+    // ─── حالة 1: طرد أدمن بوت من القروب ───
+    if (logMessageType === "log:unsubscribe") {
+      const leftID = String(
+        logMessageData?.leftParticipantFbId ||
+        logMessageData?.removedParticipants?.[0]?.userFbId ||
+        ""
+      );
+      if (!leftID || !adminBot.includes(leftID)) return;
+
+      // اطرد اللي طرده
+      await api.removeUserFromGroup(actor, threadID).catch(() => {});
+      await new Promise(r => setTimeout(r, 800));
+
+      // أضفه راجع وعيّنه أدمن
+      await api.addUserToGroup(leftID, threadID).catch(() => {});
+      await new Promise(r => setTimeout(r, 1000));
+      await api.changeAdminStatus(threadID, leftID, true).catch(() => {});
+      return;
+    }
+
+    // ─── حالة 2: إزالة صلاحيات أدمن بوت أو البوت نفسه ───
+    if (logMessageType === "log:thread-admins") {
+      if (logMessageData?.ADMIN_EVENT !== "remove_admin") return;
+
+      const targetID = String(logMessageData?.TARGET_ID || "");
+      const isProtected = adminBot.includes(targetID) || targetID === botID;
+      if (!isProtected) return;
+
+      try {
+        const info = await api.getThreadInfo(threadID);
+        if (!info) return;
+
+        const currentAdmins = (info.adminIDs || []).map(a => String(a.id || a));
+
+        // أول شيء: أشيل صلاحيات اللي فعلها
+        await api.changeAdminStatus(threadID, actor, false).catch(() => {});
+        await new Promise(r => setTimeout(r, 500));
+
+        // أشيل صلاحيات باقي الأدمنات — ما عدا أدمنات البوت والبوت نفسه
+        for (const id of currentAdmins) {
+          if (id === actor) continue;                // تم بالفعل
+          if (adminBot.includes(id)) continue;       // محمي
+          if (id === botID) continue;                // البوت
+          await api.changeAdminStatus(threadID, id, false).catch(() => {});
+          await new Promise(r => setTimeout(r, 500));
+        }
+
+        // أرجّع الصلاحيات للمحمي
+        await api.changeAdminStatus(threadID, targetID, true).catch(() => {});
+
+      } catch (e) {
+        console.error("❌ protectOwner admin-event:", e.message);
+      }
+      return;
+    }
+  }
 };
