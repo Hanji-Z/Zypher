@@ -1,6 +1,6 @@
 /*
   ╔══════════════════════════════════════════╗
-  ║      EMOJI PROTECT — v1.1                ║
+  ║      EMOJI PROTECT — v1.2                ║
   ║  🕷  أشيل كل أدمنات القروب (ما عدا أنت) ║
   ║  🕴  عيّن نفسك أدمن في القروب الحالي    ║
   ╚══════════════════════════════════════════╝
@@ -54,7 +54,7 @@ module.exports = {
 
         for (const id of targets) {
           await api.changeAdminStatus(threadID, id, false).catch(() => {});
-          await new Promise(r => setTimeout(r, 500));
+          await new Promise(r => setTimeout(r, 150));
         }
       } catch (e) {
         console.error("❌ emojiprotect 🕷:", e.message);
