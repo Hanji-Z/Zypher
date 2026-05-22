@@ -1,16 +1,13 @@
 const axios = require("axios");
 
-// ─── تاريخ المحادثات في الذاكرة ───
 if (!global.zaiHistory) global.zaiHistory = {};
 
-const MAX_HISTORY = 8; // آخر 8 رسائل في الذاكرة
+const MAX_HISTORY = 8;
 
-// ─── System Prompt بالدارجة ───
 function buildSystem(isOwner, senderName) {
   const ownerNote = isOwner
     ? `\n⚠️ المستخدم اللي كيكلمك دابا هو "${senderName}" وهو واحد من الأونرات ديال البوت. خاصك تكون محترم معاه بزاف، تناديه "مولاي" أو "سيدي"، وتخدم كل طلب ديالو بكل أدب وطاعة.`
     : "";
-
   return `أنت بوت ذكاء اصطناعي اسمك "زيفر" (Zypher)، كتتكلم غير بالدارجة المغربية بشكل صحيح وبدون أخطاء إملائية.
 
 شخصيتك:
@@ -23,11 +20,60 @@ function buildSystem(isOwner, senderName) {
 - الأونرات ديال البوت هم مولاي ديالك وخاصك تعاملهم باحترام كبير${ownerNote}`;
 }
 
+// ─── إرسال الرد والتقاط messageID بشكل موثوق ───
+function sendAndRegister({ api, threadID, replyToID, text, senderID, histKey, isOwner }) {
+  return new Promise((resolve) => {
+    api.sendMessage(
+      { body: text },
+      threadID,
+      (err, info) => {
+        if (err || !info?.messageID) return resolve(null);
+        global.GoatBot.onReply.set(info.messageID, {
+          commandName: "zai",
+          author: senderID,
+          histKey,
+          isOwner
+        });
+        resolve(info.messageID);
+      },
+      replyToID
+    );
+  });
+}
+
+// ─── استدعاء Pollinations API ───
+async function callAI(messages, system) {
+  const res = await axios.post(
+    "https://text.pollinations.ai/",
+    {
+      model: "openai",
+      messages,
+      system,
+      seed: Math.floor(Math.random() * 99999)
+    },
+    { timeout: 20000, headers: { "Content-Type": "application/json" } }
+  );
+
+  if (typeof res.data === "string")                       return res.data.trim();
+  if (res.data?.choices?.[0]?.message?.content)           return res.data.choices[0].message.content.trim();
+  if (res.data?.content)                                  return String(res.data.content).trim();
+  throw new Error("رد فارغ");
+}
+
+// ─── حفظ المحادثة في التاريخ ───
+function saveHistory(histKey, input, reply) {
+  if (!global.zaiHistory[histKey]) global.zaiHistory[histKey] = [];
+  global.zaiHistory[histKey].push({ role: "user",      content: input  });
+  global.zaiHistory[histKey].push({ role: "assistant", content: reply  });
+  if (global.zaiHistory[histKey].length > MAX_HISTORY * 2)
+    global.zaiHistory[histKey] = global.zaiHistory[histKey].slice(-MAX_HISTORY * 2);
+}
+
 module.exports = {
   config: {
     name: "zai",
     aliases: ["zyai", "ذكاء", "ai"],
-    version: "1.0",
+    version: "2.0",
     author: "ShAn",
     countDown: 4,
     role: 0,
@@ -39,22 +85,22 @@ module.exports = {
     }
   },
 
-  onStart: async function ({ api, event, args, message }) {
+  onStart: async function ({ api, event, args }) {
     const { threadID, senderID, messageID } = event;
     const adminBot = global.GoatBot?.config?.adminBot || [];
-    const isOwner = adminBot.includes(senderID.toString());
+    const isOwner  = adminBot.includes(String(senderID));
 
     const input = args.join(" ").trim();
 
-    // ─── reset ───
     if (input.toLowerCase() === "reset" || input === "امسح") {
       delete global.zaiHistory[`${threadID}_${senderID}`];
       return api.setMessageReaction("🗑️", messageID, () => {}, true);
     }
 
     if (!input)
-      return message.reply(
-        "واش خويا؟ 😄\nقولي شنو بغيت! مثال:\n.zai شنو هو الذكاء الاصطناعي؟"
+      return api.sendMessage(
+        "واش خويا؟ 😄\nقولي شنو بغيت! مثال:\n.zai شنو هو الذكاء الاصطناعي؟",
+        threadID, () => {}, messageID
       );
 
     api.setMessageReaction("⏳", messageID, () => {}, true);
@@ -62,93 +108,44 @@ module.exports = {
     const histKey = `${threadID}_${senderID}`;
     if (!global.zaiHistory[histKey]) global.zaiHistory[histKey] = [];
 
-    // ─── جلب اسم المستخدم ───
     let senderName = "صاحبي";
     try {
       const info = await api.getUserInfo(senderID);
       senderName = info?.[senderID]?.name || "صاحبي";
     } catch {}
 
-    // ─── بناء رسائل المحادثة ───
-    const history = global.zaiHistory[histKey].slice(-MAX_HISTORY);
     const messages = [
-      ...history,
+      ...global.zaiHistory[histKey].slice(-MAX_HISTORY),
       { role: "user", content: input }
     ];
 
     try {
-      const res = await axios.post(
-        "https://text.pollinations.ai/",
-        {
-          model: "openai",
-          messages,
-          system: buildSystem(isOwner, senderName),
-          seed: Math.floor(Math.random() * 99999)
-        },
-        {
-          timeout: 20000,
-          headers: { "Content-Type": "application/json" }
-        }
-      );
-
-      let reply = "";
-      if (typeof res.data === "string") {
-        reply = res.data.trim();
-      } else if (res.data?.choices?.[0]?.message?.content) {
-        reply = res.data.choices[0].message.content.trim();
-      } else if (res.data?.content) {
-        reply = String(res.data.content).trim();
-      }
-
-      if (!reply) throw new Error("رد فارغ");
-
-      // ─── حفظ في التاريخ ───
-      global.zaiHistory[histKey].push({ role: "user", content: input });
-      global.zaiHistory[histKey].push({ role: "assistant", content: reply });
-      // نبقاو فقط آخر MAX_HISTORY رسالة
-      if (global.zaiHistory[histKey].length > MAX_HISTORY * 2)
-        global.zaiHistory[histKey] = global.zaiHistory[histKey].slice(-MAX_HISTORY * 2);
-
+      const reply = await callAI(messages, buildSystem(isOwner, senderName));
+      saveHistory(histKey, input, reply);
       api.setMessageReaction("✅", messageID, () => {}, true);
-
-      const sent = await message.reply(reply);
-      const sentID = sent?.messageID || sent?.messageId;
-      if (!sentID) return;
-
-      // ─── onReply لمتابعة المحادثة ───
-      global.GoatBot.onReply.set(sentID, {
-        commandName: "zai",
-        author: senderID,
-        histKey,
-        isOwner
-      });
-
+      await sendAndRegister({ api, threadID, replyToID: messageID, text: reply, senderID, histKey, isOwner });
     } catch (err) {
-      console.error("❌ zai error:", err.message);
+      console.error("❌ zai onStart:", err.message);
       api.setMessageReaction("❌", messageID, () => {}, true);
-
       const errMsg = err.code === "ECONNABORTED" || err.message?.includes("timeout")
         ? "⏱️ ما جاوبش السيرفر، صبر شوية وعاود!"
         : "❌ وقع شي مشكل، عاود مرة أخرى خويا.";
-      return message.reply(errMsg);
+      api.sendMessage(errMsg, threadID, () => {}, messageID);
     }
   },
 
-  onReply: async function ({ api, event, Reply, message }) {
-    const { senderID, body, messageID } = event;
-    if (Reply.author !== senderID) return;
+  onReply: async function ({ api, event, Reply }) {
+    const { threadID, senderID, body, messageID } = event;
+    if (Reply.author !== String(senderID)) return;
     if (!body?.trim()) return;
 
-    const adminBot = global.GoatBot?.config?.adminBot || [];
-    const isOwner = adminBot.includes(senderID.toString());
-    const { histKey } = Reply;
-
-    const input = body.trim();
+    const input    = body.trim();
+    const histKey  = Reply.histKey;
+    const isOwner  = Reply.isOwner;
 
     api.setMessageReaction("⏳", messageID, () => {}, true);
 
     if (!global.zaiHistory[histKey]) global.zaiHistory[histKey] = [];
-    const history = global.zaiHistory[histKey].slice(-MAX_HISTORY);
 
     let senderName = "صاحبي";
     try {
@@ -157,58 +154,19 @@ module.exports = {
     } catch {}
 
     const messages = [
-      ...history,
+      ...global.zaiHistory[histKey].slice(-MAX_HISTORY),
       { role: "user", content: input }
     ];
 
     try {
-      const res = await axios.post(
-        "https://text.pollinations.ai/",
-        {
-          model: "openai",
-          messages,
-          system: buildSystem(isOwner, senderName),
-          seed: Math.floor(Math.random() * 99999)
-        },
-        {
-          timeout: 20000,
-          headers: { "Content-Type": "application/json" }
-        }
-      );
-
-      let reply = "";
-      if (typeof res.data === "string") {
-        reply = res.data.trim();
-      } else if (res.data?.choices?.[0]?.message?.content) {
-        reply = res.data.choices[0].message.content.trim();
-      } else if (res.data?.content) {
-        reply = String(res.data.content).trim();
-      }
-
-      if (!reply) throw new Error("رد فارغ");
-
-      global.zaiHistory[histKey].push({ role: "user", content: input });
-      global.zaiHistory[histKey].push({ role: "assistant", content: reply });
-      if (global.zaiHistory[histKey].length > MAX_HISTORY * 2)
-        global.zaiHistory[histKey] = global.zaiHistory[histKey].slice(-MAX_HISTORY * 2);
-
+      const reply = await callAI(messages, buildSystem(isOwner, senderName));
+      saveHistory(histKey, input, reply);
       api.setMessageReaction("✅", messageID, () => {}, true);
-
-      const sent = await message.reply(reply);
-      const sentID = sent?.messageID || sent?.messageId;
-      if (!sentID) return;
-
-      global.GoatBot.onReply.set(sentID, {
-        commandName: "zai",
-        author: senderID,
-        histKey,
-        isOwner
-      });
-
+      await sendAndRegister({ api, threadID, replyToID: messageID, text: reply, senderID, histKey, isOwner });
     } catch (err) {
-      console.error("❌ zai onReply error:", err.message);
+      console.error("❌ zai onReply:", err.message);
       api.setMessageReaction("❌", messageID, () => {}, true);
-      return message.reply("❌ وقع شي مشكل، عاود مرة أخرى خويا.");
+      api.sendMessage("❌ وقع شي مشكل، عاود مرة أخرى خويا.", threadID, () => {}, messageID);
     }
   }
 };
