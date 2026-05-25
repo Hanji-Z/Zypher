@@ -7,23 +7,17 @@ const MAX_HISTORY    = 12;
 const MAX_GROUP_CTX  = 20;  // آخر 20 رسالة من القروب
 
 // ══════════════════════════════════════════════════
-//  أسماء خاصة لكل أونر — زيفر يعيط لكل واحد باسمه
+//  اسم كل الأونرات — يُقرأ من config.json تلقائياً
 // ══════════════════════════════════════════════════
-const ownerNicknames = {
-  "61588916906429": "هانجي",
-  "61573349408673": "مولاي",
-  "61588902340673": "مولاي"
-};
-
-function getOwnerName(senderID) {
-  return ownerNicknames[String(senderID)] || "مولاي";
+function getOwnerName() {
+  return "هانجي";
 }
 
 // ══════════════════════════════════════════════════
 //  System prompt — شخصية زيفر الكاملة
 // ══════════════════════════════════════════════════
 function buildSystem(isOwner, senderID, groupCtx) {
-  const nickname = isOwner ? getOwnerName(senderID) : null;
+  const nickname = isOwner ? getOwnerName() : null;
 
   const ownerNote = isOwner
     ? `\n\n━━ معلومة مهمة ━━
