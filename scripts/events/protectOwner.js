@@ -1,16 +1,15 @@
 /*
   ╔══════════════════════════════════════════╗
-  ║    PROTECT OWNER — v5.0                  ║
-  ║  • mutex لكل قروب — يمنع التشابك        ║
-  ║  • يحمي فقط adminBot (مش البوت نفسه)    ║
+  ║    PROTECT OWNER — v6.0                  ║
+  ║  • طرد أدمن بوت → كيك + يرجع           ║
+  ║  • إزالة ادمن بوت → كيك المعتدي         ║
+  ║  • mutex لكل قروب                        ║
   ╚══════════════════════════════════════════╝
 */
 
-// ─── قفل لكل قروب يمنع تنفيذين بالتوازي ───
 const locks = new Map();
 
 async function withLock(threadID, fn) {
-  // انتظر لحتى القفل يُحرَّر
   while (locks.get(threadID)) {
     await new Promise(r => setTimeout(r, 200));
   }
@@ -22,7 +21,7 @@ async function withLock(threadID, fn) {
 module.exports = {
   config: {
     name: "protectOwner",
-    version: "5.0",
+    version: "6.0",
     author: "ShAn",
     category: "events"
   },
@@ -35,8 +34,6 @@ module.exports = {
     if (!logMessageType) return;
 
     const actor = String(author || "");
-
-    // actor فارغ أو محمي → تجاهل
     if (!actor || adminBot.includes(actor) || actor === botID) return;
 
     // ─── حالة 1: طرد أدمن بوت ─────────────────────────────
@@ -48,13 +45,10 @@ module.exports = {
       if (!leftID || !adminBot.includes(leftID)) return;
 
       await withLock(threadID, async () => {
-        // 1. اكيك اللي طرده
         await api.removeUserFromGroup(actor, threadID).catch(() => {});
         await new Promise(r => setTimeout(r, 1000));
-        // 2. أضف المطرود راجع
         await api.addUserToGroup(leftID, threadID).catch(() => {});
         await new Promise(r => setTimeout(r, 1000));
-        // 3. عيّنه أدمن
         await api.changeAdminStatus(threadID, leftID, true).catch(() => {});
       });
       return;
@@ -62,38 +56,39 @@ module.exports = {
 
     // ─── حالة 2: إزالة صلاحيات أدمن بوت ─────────────────
     if (logMessageType === "log:thread-admins") {
-      if (logMessageData?.ADMIN_EVENT !== "remove_admin") return;
 
-      const targetID = String(logMessageData?.TARGET_ID || "");
+      // ─── log للديباغ: نشوف الحقول الفعلية في Railway ───
+      console.log("[protectOwner] log:thread-admins data:", JSON.stringify(logMessageData));
+      console.log("[protectOwner] actor:", actor);
+
+      // Facebook يرسل untypedData بأسماء مختلفة — نجرب كلها
+      const adminEvent = String(
+        logMessageData?.ADMIN_EVENT ||
+        logMessageData?.admin_event  ||
+        logMessageData?.adminEvent   || ""
+      ).toLowerCase();
+
+      const targetID = String(
+        logMessageData?.TARGET_ID   ||
+        logMessageData?.target_id   ||
+        logMessageData?.targetId    || ""
+      );
+
+      console.log("[protectOwner] adminEvent:", adminEvent, "| targetID:", targetID);
+
+      if (adminEvent !== "remove_admin") return;
       if (!targetID || !adminBot.includes(targetID)) return;
 
       await withLock(threadID, async () => {
         try {
-          const info = await api.getThreadInfo(threadID);
-          if (!info) return;
+          // 1. كيك المعتدي مباشرة
+          await api.removeUserFromGroup(actor, threadID).catch(() => {});
+          await new Promise(r => setTimeout(r, 800));
 
-          // فقط الأدمنات الحاليين اللي ما هم محميين
-          const currentAdmins = (info.adminIDs || [])
-            .map(a => String(a.id || a))
-            .filter(id =>
-              id !== actor &&           // مش اللي فعلها (راه تم)
-              !adminBot.includes(id) && // مش محمي
-              id !== botID              // مش البوت
-            );
-
-          // أشيل صلاحيات اللي فعلها
-          await api.changeAdminStatus(threadID, actor, false).catch(() => {});
-
-          // أشيل باقي الأدمنات غير المحميين
-          for (const id of currentAdmins) {
-            await api.changeAdminStatus(threadID, id, false).catch(() => {});
-            await new Promise(r => setTimeout(r, 300));
-          }
-
-          // أرجع الصلاحية للمحمي
+          // 2. أرجع الصلاحية للمحمي
           await api.changeAdminStatus(threadID, targetID, true).catch(() => {});
         } catch (e) {
-          console.error("❌ protectOwner:", e.message);
+          console.error("❌ protectOwner log:thread-admins:", e.message);
         }
       });
     }
