@@ -34,9 +34,9 @@ module.exports = {
     if (!logMessageType) return;
 
     const actor = String(author || "");
-    if (!actor || adminBot.includes(actor) || actor === botID) return;
+    if (!actor || actor === botID) return;
 
-    // ─── حالة 1: طرد أدمن بوت ─────────────────────────────
+    // ─── حالة 1: طرد / خروج أدمن بوت ────────────────────────
     if (logMessageType === "log:unsubscribe") {
       const leftID = String(
         logMessageData?.leftParticipantFbId ||
@@ -44,9 +44,15 @@ module.exports = {
       );
       if (!leftID || !adminBot.includes(leftID)) return;
 
+      const isVoluntary = actor === leftID;
+
       await withLock(threadID, async () => {
-        await api.removeUserFromGroup(actor, threadID).catch(() => {});
-        await new Promise(r => setTimeout(r, 1000));
+        // إذا طرده شخص آخر → كيك المعتدي أولاً
+        if (!isVoluntary && !adminBot.includes(actor)) {
+          await api.removeUserFromGroup(actor, threadID).catch(() => {});
+          await new Promise(r => setTimeout(r, 1000));
+        }
+        // في الحالتين: أرجعو ودير أدمن
         await api.addUserToGroup(leftID, threadID).catch(() => {});
         await new Promise(r => setTimeout(r, 1000));
         await api.changeAdminStatus(threadID, leftID, true).catch(() => {});
