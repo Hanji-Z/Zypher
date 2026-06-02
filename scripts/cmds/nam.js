@@ -3,6 +3,7 @@ const path = require("path");
 
 if (!global.zypherUnder) global.zypherUnder = {};
 if (!global.zypherLocks) global.zypherLocks = {};
+if (!global.zypherLastCheck) global.zypherLastCheck = {};
 
 module.exports = {
   config: {
@@ -142,6 +143,29 @@ module.exports = {
     } catch (err) {
       console.error("❌ Error in .nam:", err);
     }
+  },
+
+  onChat: async function ({ event, api }) {
+    const { threadID, senderID } = event;
+    if (!event.isGroup) return;
+
+    const lockKey = `${threadID}_${senderID}`;
+    if (global.zypherLocks[lockKey] === undefined) return;
+
+    // ── Cooldown 30 ثانية لكل شخص ──
+    const now = Date.now();
+    const last = global.zypherLastCheck[lockKey] || 0;
+    if (now - last < 30000) return;
+    global.zypherLastCheck[lockKey] = now;
+
+    try {
+      const threadInfo = await api.getThreadInfo(threadID);
+      const currentNick = (threadInfo?.nicknames || {})[senderID] || "";
+      const lockedNick  = global.zypherLocks[lockKey];
+      if (currentNick !== lockedNick) {
+        api.changeNickname(lockedNick, threadID, senderID).catch(() => {});
+      }
+    } catch {}
   },
 
   onEvent: async function ({ event, api }) {
