@@ -57,7 +57,7 @@
       "email": "sirana5097@gmail.com",
       "clientId": "255361029474-23gsoq2mk3917srj7teaot6o3jklkag0.apps.googleusercontent.com",
       "clientSecret": "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",
-      "refreshToken": "1//04RUwcisFyzPMC6IARAAGAQSNwF-L9IrrhGECen-KP7IHWTWmK8fTyP0awZCpdwFpVZG7cJKhyrHhmXzlYtXWUs_eB3wfzByGQY",
+      "refreshToken": "1//04RUwcisFyzPMCgYIARAAGAQSNwF-L9IrrhGECen-KP7IHWTWmK8fTyP0awZCpdwFpVZG7cJKhyrHhmXzlYtXWUs_eB3wfzByGQY",
       "apiKey": ""
     },
     "gRecaptcha": {
@@ -110,7 +110,7 @@
     "gmail": {
       "enable": true,
       "emailGetNoti": "sirana5097@gmail.com",
-      "note": "Bot will use gmailAccount to send email to emailGetNoti, can send notifications to many email, separate by comma or space, example: \"example1@gmail.com example2@gmail.com\" (without backslash)"
+      "note": "Bot will use gmailAccount to send email to emailGetNoti, can send email notifications to many email, separate by comma or space, example: \"example1@gmail.com example2@gmail.com\" (without backslash)"
     },
     "telegram": {
       "enable": false,
