@@ -42,8 +42,7 @@
   "whiteListModeThread": {
     "enable": false,
     "whiteListThreadIds": [],
-    "notes": "if you enable this feature, only the thread in the whiteListThreadIds list can use the bot",
-    "how_it_work": "if you enable both whiteListMode and whiteListModeThread, the system will check if the user is in whiteListIds, then check if the thread is in whiteListThreadIds, if one of the conditions is true, the user can use the bot"
+    "notes": "if you enable both whiteListMode and whiteListModeThread, the bot will check if the user is in whiteListIds, then check if the thread is in whiteListThreadIds, if one of the conditions is true, the user can use the bot"
   },
   "database": {
     "type": "json",
@@ -58,7 +57,7 @@
       "email": "sirana5097@gmail.com",
       "clientId": "255361029474-23gsoq2mk3917srj7teaot6o3jklkag0.apps.googleusercontent.com",
       "clientSecret": "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",
-      "refreshToken": "1//04RUwcisFyzPMCgYIARAAGAQSNwF-L9IrrhGECen-KP7IHWTWmK8fTyP0awZCpdwFpVZG7cJKhyrHhmXzlYtXWUs_eB3wfzByGQY",
+      "refreshToken": "1//04RUwcisFyzPMC6IARAAGAQSNwF-L9IrrhGECen-KP7IHWTWmK8fTyP0awZCpdwFpVZG7cJKhyrHhmXzlYtXWUs_eB3wfzByGQY",
       "apiKey": ""
     },
     "gRecaptcha": {
@@ -155,6 +154,11 @@
     "selfListenEvent": true,
     "autoMarkDelivery": false,
     "autoReconnect": false,
-    "notes": "Document here: https://github.com/ntkhang03/fb-chat-api/blob/master/DOCS.md#apisetoptionsoptions "
+    "notes": "Document here: https://github.com/ntkhang03/fb-chat-api/blob/master/DOCS.md#apisetoptionsoptions"
+  },
+  "Arafat": {
+    "api": "https://arafatas.vercel.app",
+    "version": "1.0.4",
+    "author": "ARAFAT"
   }
 }
