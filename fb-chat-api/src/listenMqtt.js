@@ -39,6 +39,48 @@ const topics = [
 function listenMqtt(defaultFuncs, api, ctx, globalCallback) {
 	//Don't really know what this does but I think it's for the active state?
 	//TODO: Move to ctx when implemented
+	ctx.mqttReconnectStopped = false;
+	let failureReported = false;
+	let reconnectScheduled = false;
+
+	const reportConnectionFailure = () => {
+		if (failureReported) return;
+		failureReported = true;
+		utils.checkLiveCookie(ctx, defaultFuncs)
+			.then(() => {
+				globalCallback({
+					type: "stop_listen",
+					error: "Connection refused: Server unavailable"
+				}, null);
+			})
+			.catch(() => {
+				globalCallback({
+					type: "account_inactive",
+					error: "Maybe your account is blocked by facebook, please login and check at https://facebook.com"
+				}, null);
+			});
+	};
+
+	const scheduleReconnect = () => {
+		if (!ctx.globalOptions.autoReconnect || ctx.mqttReconnectStopped || reconnectScheduled) {
+			if (!ctx.globalOptions.autoReconnect) reportConnectionFailure();
+			return;
+		}
+
+		reconnectScheduled = true;
+		ctx.mqttReconnectAttempts = (ctx.mqttReconnectAttempts || 0) + 1;
+		const backoff = Math.min(60000, 1000 * (2 ** Math.min(ctx.mqttReconnectAttempts - 1, 6)));
+		const jitter = Math.floor(Math.random() * 1000);
+		const retryDelay = backoff + jitter;
+		log.warn("listenMqtt", `Connection lost; retrying in ${retryDelay} ms`);
+
+		if (ctx.mqttClient === mqttClient) ctx.mqttClient = undefined;
+		ctx.mqttReconnectTimer = setTimeout(() => {
+			ctx.mqttReconnectTimer = undefined;
+			if (!ctx.mqttReconnectStopped) listenMqtt(defaultFuncs, api, ctx, globalCallback);
+		}, retryDelay);
+	};
+
 	const chatOn = ctx.globalOptions.online;
 	const foreground = false;
 
@@ -97,7 +139,7 @@ function listenMqtt(defaultFuncs, api, ctx, globalCallback) {
 		},
 		keepalive: 60,
 		reschedulePings: true,
-		reconnectPeriod: 3
+		reconnectPeriod: 0
 	};
 
 	if (typeof ctx.globalOptions.proxy != "undefined") {
@@ -111,24 +153,8 @@ function listenMqtt(defaultFuncs, api, ctx, globalCallback) {
 
 	mqttClient.on('error', function (err) {
 		log.error("listenMqtt", err);
-		mqttClient.end();
-		if (ctx.globalOptions.autoReconnect) {
-			listenMqtt(defaultFuncs, api, ctx, globalCallback);
-		} else {
-			utils.checkLiveCookie(ctx, defaultFuncs)
-				.then(res => {
-					globalCallback({
-						type: "stop_listen",
-						error: "Connection refused: Server unavailable"
-					}, null);
-				})
-				.catch(err => {
-					globalCallback({
-						type: "account_inactive",
-						error: "Maybe your account is blocked by facebook, please login and check at https://facebook.com"
-					}, null);
-				});
-		}
+		if (!mqttClient.disconnected) mqttClient.end();
+		scheduleReconnect();
 	});
 
 	mqttClient.on('close', function () {
@@ -136,6 +162,7 @@ function listenMqtt(defaultFuncs, api, ctx, globalCallback) {
 	});
 
 	mqttClient.on('connect', function () {
+		ctx.mqttReconnectAttempts = 0;
 		topics.forEach(function (topicsub) {
 			mqttClient.subscribe(topicsub);
 		});
@@ -166,8 +193,8 @@ function listenMqtt(defaultFuncs, api, ctx, globalCallback) {
 		mqttClient.publish("/set_client_settings", JSON.stringify({ make_user_available_when_in_foreground: true }), { qos: 1 });
 
 		const rTimeout = setTimeout(function () {
-			mqttClient.end();
-			listenMqtt(defaultFuncs, api, ctx, globalCallback);
+			if (!mqttClient.disconnected) mqttClient.end();
+			scheduleReconnect();
 		}, 5000);
 
 		ctx.tmsWait = function () {
@@ -832,6 +859,11 @@ module.exports = function (defaultFuncs, api, ctx) {
 			stopListening(callback) {
 
 				callback = callback || (() => { });
+				ctx.mqttReconnectStopped = true;
+				if (ctx.mqttReconnectTimer) {
+					clearTimeout(ctx.mqttReconnectTimer);
+					ctx.mqttReconnectTimer = undefined;
+				}
 				globalCallback = identity;
 				if (ctx.mqttClient) {
 					ctx.mqttClient.unsubscribe("/webrtc");

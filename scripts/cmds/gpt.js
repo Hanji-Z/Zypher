@@ -120,11 +120,24 @@ async function sendGPT({
   userID,
   messageID
 }) {
+  let stopTyping = () => {};
+  let replyPending = false;
+
   try {
     const messages = conversations.get(userID);
 
     if (!messages) {
       throw new Error("Conversation not found.");
+    }
+
+    if (typeof api.sendTypingIndicator === "function") {
+      stopTyping = api.sendTypingIndicator(
+        event.threadID,
+        (err) => {
+          if (err) console.log("[GPT TYPING ERROR]", err.message || err);
+        },
+        event.isGroup
+      );
     }
 
     const res = await axios.post(
@@ -158,12 +171,16 @@ async function sendGPT({
     });
 
     // إرسال الرد وربطه بنظام Reply
+    replyPending = true;
     return api.sendMessage(
       {
         body: ai
       },
       event.threadID,
       (err, info) => {
+        replyPending = false;
+        stopTyping();
+
         if (err) {
           console.log("[GPT SEND ERROR]", err);
           return;
@@ -199,5 +216,13 @@ async function sendGPT({
       event.threadID,
       event.messageID
     );
+  } finally {
+    if (!replyPending) {
+      try {
+        stopTyping();
+      } catch (e) {
+        console.log("[GPT STOP TYPING ERROR]", e.message || e);
+      }
+    }
   }
             }
