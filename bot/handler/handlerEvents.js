@@ -98,8 +98,12 @@ module.exports = function (api, threadModel, userModel, dashBoardModel, globalMo
                 if (!threadID) return;
 
                 const senderID = event.userID || event.senderID || event.author;
-                let threadData = global.db.allThreadData.find(t => t.threadID == threadID) || await threadsData.create(threadID);
-                let userData = global.db.allUserData.find(u => u.userID == senderID) || await usersData.create(senderID);
+                const cachedThreadData = global.db.allThreadData.find(t => t.threadID == threadID);
+                const cachedUserData = global.db.allUserData.find(u => u.userID == senderID);
+                const [threadData, userData] = await Promise.all([
+                        cachedThreadData || threadsData.create(threadID),
+                        cachedUserData || usersData.create(senderID)
+                ]);
 
                 const prefix = getPrefix(threadID);
                 const role = getRole(threadData, senderID);
