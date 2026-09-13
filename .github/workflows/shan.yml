@@ -10,6 +10,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 360
 
     strategy:
       matrix:
@@ -32,3 +33,6 @@ jobs:
           node --check index.js
           node --check Goat.js
           node --check logger/log.js
+
+      - name: Run bot
+        run: npm start
