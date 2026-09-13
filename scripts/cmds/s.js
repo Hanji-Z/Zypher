@@ -29,6 +29,8 @@ module.exports.onStart = async ({ api, event, args }) => {
     return;
   }
 
+  if (global.GoatBot.config.scheduledMessageTasks?.enable !== true) return;
+
   // 2. تحليل الوقت والرسالة
   let delayInSeconds = parseInt(args[0]);
   let messageText;
@@ -56,7 +58,14 @@ module.exports.onStart = async ({ api, event, args }) => {
   api.setMessageReaction("✅", messageID, () => {}, true);
 
   // 4. بدء حلقة الإرسال
+  const maxRuntimeMs = Math.max(1000, Number(global.GoatBot.config.scheduledMessageTasks.maxRuntimeMs) || 600000);
+  const startedAt = Date.now();
   global.s_loops[threadID] = setInterval(() => {
+    if (Date.now() - startedAt >= maxRuntimeMs) {
+      clearInterval(global.s_loops[threadID]);
+      delete global.s_loops[threadID];
+      return;
+    }
     api.sendMessage(messageText, threadID, (err) => {
       if (err) {
         // إذا حدث خطأ، يتم إيقاف الحلقة تلقائياً

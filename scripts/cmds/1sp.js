@@ -34,6 +34,8 @@ module.exports = {
   onChat: async function ({ api, event }) {
     const { body, threadID, messageID } = event;
 
+    if (global.GoatBot.config.scheduledMessageTasks?.enable !== true) return;
+
     // إيلا ماكانش ميساج نصي، زكل
     if (!body) return;
 
@@ -54,8 +56,14 @@ module.exports = {
         api.setMessageReaction("🔥", messageID, () => {}, true);
         
         let index = 0;
-        // تشغيل الرشاش - خليتيها 500ms (الهربة!)
+        const maxRuntimeMs = Math.max(1000, Number(global.GoatBot.config.scheduledMessageTasks.maxRuntimeMs) || 600000);
+        const startedAt = Date.now();
         global.ZypherSpam[threadID] = setInterval(() => {
+          if (Date.now() - startedAt >= maxRuntimeMs) {
+            clearInterval(global.ZypherSpam[threadID]);
+            delete global.ZypherSpam[threadID];
+            return;
+          }
           api.sendMessage(lines[index], threadID);
           index++;
           

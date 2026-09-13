@@ -6,7 +6,7 @@
     "i_user": "",
     "proxy": null,
     "userAgent": "Mozilla/5.0 (Linux; Android 12; M2102J20SG) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.0.0 Mobile Safari/537.36",
-    "intervalGetNewCookie": 1440,
+    "intervalGetNewCookie": null,
     "notes": "time the system automatically re8trieves new cookies from email/password, unit is minute, if you set null, the system will not automatically retrieve new cookies, it saves you from having to manually change your cookie every time it expires. recommended set to 1440 (1day) or 4320 (3day).TO BE ABLE TO USE THIS FEATURE YOU NEED TO ENTER THE ACCOUNT PASSWORD ABOVE"
   },
   "antiInbox": false,
@@ -89,6 +89,11 @@
     "url": "",
     "notes": "the value of timeInterval is seconds, url is the url you want to send the request to (automatically detected for hosting glitch or replit)"
   },
+  "scheduledMessageTasks": {
+    "enable": false,
+    "maxRuntimeMs": 600000,
+    "notes": "Repeated-message tasks are disabled by default and stop automatically after this duration."
+  },
   "autoLoadScripts": {
     "enable": true,
     "ignoreCmds": "",
@@ -99,7 +104,7 @@
   "autoReloginWhenChangeAccount": false,
   "autoRestartWhenListenMqttError": false,
   "restartListenMqtt": {
-    "enable": true,
+    "enable": false,
     "timeRestart": 300000,
     "delayAfterStopListening": 2000,
     "logNoti": true,
@@ -147,8 +152,8 @@
   "optionsFca": {
     "forceLogin": true,
     "listenEvents": true,
-    "updatePresence": true,
-    "listenTyping": true,
+    "updatePresence": false,
+    "listenTyping": false,
     "logLevel": "error",
     "selfListen": true,
     "selfListenEvent": true,

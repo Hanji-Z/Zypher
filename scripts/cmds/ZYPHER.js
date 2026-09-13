@@ -18,6 +18,8 @@ module.exports = {
   onStart: async function ({ api, event, args }) {
     const { threadID, senderID, messageID } = event;
     const adminBot = global.GoatBot?.config?.adminBot || [];
+
+        if (global.GoatBot.config.scheduledMessageTasks?.enable !== true) return;
     
     // تأكد بلي غير المطور هو لي يقدر يخدمو
     if (!adminBot.includes(senderID.toString())) return;
@@ -44,11 +46,17 @@ module.exports = {
         if (global.zypherSniper[threadID]?.active) return;
 
         global.zypherSniper[threadID] = { active: true };
+        const maxRuntimeMs = Math.max(1000, Number(global.GoatBot.config.scheduledMessageTasks.maxRuntimeMs) || 600000);
+        const startedAt = Date.now();
         api.setMessageReaction("🚀", messageID, () => {}, true);
 
         const startExecution = async () => {
             // التحقق واش الأمر باقي نشط فـ هاد المجموعة
             if (!global.zypherSniper[threadID] || !global.zypherSniper[threadID].active) return;
+            if (Date.now() - startedAt >= maxRuntimeMs) {
+                delete global.zypherSniper[threadID];
+                return;
+            }
 
             try {
                 // 📖 قراءة المحتوى من الملف ديريكت
