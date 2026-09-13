@@ -122,6 +122,7 @@ async function sendGPT({
 }) {
   let stopTyping = () => {};
   let replyPending = false;
+  let typingInterval;
 
   try {
     const messages = conversations.get(userID);
@@ -131,13 +132,22 @@ async function sendGPT({
     }
 
     if (typeof api.sendTypingIndicator === "function") {
-      stopTyping = api.sendTypingIndicator(
+      const isGroup = typeof event.isGroup === "boolean" ? event.isGroup : undefined;
+      const sendTyping = () => api.sendTypingIndicator(
         event.threadID,
         (err) => {
           if (err) console.log("[GPT TYPING ERROR]", err.message || err);
         },
-        event.isGroup
+        isGroup
       );
+      let endTyping = sendTyping();
+      typingInterval = setInterval(() => {
+        endTyping = sendTyping();
+      }, 10000);
+      stopTyping = () => {
+        clearInterval(typingInterval);
+        endTyping();
+      };
     }
 
     const res = await axios.post(
