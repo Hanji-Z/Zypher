@@ -1,92 +1,162 @@
-const axios = require('axios');
-const fs = require('fs-extra');
-const path = require('path');
+const axios = require("axios");
+const ytSearch = require("yt-search");
 
 module.exports = {
   config: {
-    name: "song",
-    aliases: ["music", "اغنية"],
-    version: "6.0.0",
-    author: "Zypher",
-    countDown: 20, // حماية من البلوك والسبام
+    name: "sing",
+    version: "22.0",
+    author: "Arafat",
     role: 0,
-    category: "MEDIA",
-    shortDescription: { en: "Download full audio with smart duration filter" },
-    guide: { en: "{pn} [song name]" }
+    description: { en: "🎵 Premium Music Downloader" },
+    category: "audio"
   },
 
-  onStart: async function ({ api, event, args }) {
-    const { threadID, messageID } = event;
-    const sidebar = "█║ ";
-    const line = "█║──────────────────";
-    const query = args.join(" ");
+  onStart: async ({ api, args, event, commandName }) => {
 
-    if (!query) return;
+    if (!args.length)
+      return api.sendMessage("🎵 Please type a song name.", event.threadID, event.messageID);
 
-    // تفاعل بالانتظار
-    api.setMessageReaction("⏳", messageID, () => {}, true);
+    const isList = args[0] === "-l";
+    const keyword = isList ? args.slice(1).join(" ") : args.join(" ");
+
+    if (!keyword)
+      return api.sendMessage("🎵 Please type a song name.", event.threadID, event.messageID);
 
     try {
-      // البحث في تيكتوك مع إضافة "full song" لضمان نتائج طويلة
-      const searchRes = await axios.get(`https://lyric-search-neon.vercel.app/kshitiz?keyword=${encodeURIComponent(query + " full song")}`, { timeout: 15000 });
-      const videos = searchRes.data;
-
-      if (!videos || videos.length === 0) {
-        api.setMessageReaction("❌", messageID, () => {}, true);
-        return;
+      let results = [];
+      try {
+        const searchResult = await ytSearch(keyword);
+        results = searchResult.videos.slice(0, 6);
+      } catch (err) {
+        console.log("YT-SEARCH ERROR:", err.message);
       }
 
-      // --- 🧠 الفلتر الذكي: البحث عن فيديو بين دقيقة و 4 دقائق ---
-      let selectedVideo = videos.find(v => v.duration && v.duration >= 60 && v.duration <= 240);
+      if (!results.length)
+        return api.sendMessage("❌ No songs found.", event.threadID, event.messageID);
 
-      // إيلا مالقيناش، ناخدو أطول واحد فيهم
-      if (!selectedVideo) {
-        selectedVideo = videos.sort((a, b) => (b.duration || 0) - (a.duration || 0))[0];
-      }
+      if (isList) {
+        let text = "╭───────────────❍\n";
+        text += "│   🎵 𝑺𝒐𝒏𝒈 𝑳𝒊𝒔𝒕\n";
+        text += "╰───────────────❍\n\n";
 
-      const videoUrl = selectedVideo.videoUrl;
-      const durationSec = selectedVideo.duration || 0;
-      const minutes = Math.floor(durationSec / 60);
-      const seconds = durationSec % 60;
-
-      // تجهيز مكان التخزين المؤقت
-      const cachePath = path.join(__dirname, 'cache');
-      if (!fs.existsSync(cachePath)) fs.mkdirSync(cachePath);
-      
-      const filePath = path.join(cachePath, `song_${Date.now()}.mp3`);
-
-      // تحميل الملف الصوتي
-      const response = await axios({
-        method: 'get',
-        url: videoUrl,
-        responseType: 'stream',
-        timeout: 30000 
-      });
-
-      const writer = fs.createWriteStream(filePath);
-      response.data.pipe(writer);
-
-      writer.on('finish', async () => {
-        // إرسال الأغنية
-        await api.sendMessage({
-          body: `[ 𝗭𝗬𝗣𝗛𝗘𝗥 - 𝗔𝗨𝗗𝗜𝗢 ]\n${line}\n${sidebar}❯ 🎵 **Track**: ${query}\n${sidebar}❯ ⏳ **Duration**: ${minutes}:${seconds < 10 ? '0' : ''}${seconds}\n${line}\n${sidebar}[ 𝗦𝗬𝗦𝗧𝗘𝗠 𝗢𝗣𝗘𝗥𝗔𝗧𝗜𝗢𝗡𝗔𝗟 ]`,
-          attachment: fs.createReadStream(filePath)
-        }, threadID, messageID);
-
-        // تبديل الإيموجي لتم بنجاح
-        api.setMessageReaction("✅", messageID, () => {}, true);
-        
-        // مسح الملف مورا 5 ثواني باش السيرفر يبقى نقي
-        if (fs.existsSync(filePath)) {
-          setTimeout(() => fs.unlinkSync(filePath), 5000);
+        for (let i = 0; i < results.length; i++) {
+          const v = results[i];
+          text += `╭─❍\n`;
+          text += `┊  ${i + 1}. ${v.title}\n`;
+          text += `┊  ⏳ ${v.timestamp || "Unknown"}\n`;
+          text += `┊  📺 ${v.author.name}\n`;
+          text += `╰───────────────❍\n\n`;
         }
+
+        text += "╭───────────────❍\n";
+        text += "│   🔢 Reply with number (1–6)\n";
+        text += "╰───────────────❍";
+
+        return api.sendMessage(
+          { body: text },
+          event.threadID,
+          (err, info) => {
+            global.GoatBot.onReply.set(info.messageID, {
+              commandName,
+              messageID: info.messageID,
+              author: event.senderID,
+              results
+            });
+          },
+          event.messageID
+        );
+      }
+
+      const video = results[0];
+      const apiBase = String(global.GoatBot.config.Arafat?.api || "").trim();
+
+      if (!apiBase)
+        return api.sendMessage("❌ Error: API Base URL is empty!", event.threadID, event.messageID);
+
+      const finalURL = `${apiBase}/download/arafatadl?url=${encodeURIComponent(video.url)}`;
+
+      api.setMessageReaction("🌷", event.messageID, () => {}, true);
+
+      const res = await axios({
+        url: finalURL,
+        method: "GET",
+        responseType: "stream",
+        timeout: 0
       });
 
-      writer.on('error', (err) => { throw err; });
+      if (res.status !== 200)
+        return api.sendMessage("❌ Download failed.", event.threadID, event.messageID);
 
-    } catch (e) {
-      console.error(e);
-      api.setMessageReaction("❌", messageID, () => {}, true);
+      await api.sendMessage(
+        {
+          body:
+`╭───────────────❍
+│ 🎧 𝑫𝒐𝒘𝒏𝒍𝒐𝒂𝒅 𝑺𝒖𝒄𝒄𝒆𝒔𝒔
+├───────────────❍
+│ 🎵 ${video.title}
+╰───────────────❍`,
+          attachment: res.data
+        },
+        event.threadID,
+        () => api.setMessageReaction("🎀", event.messageID, () => {}, true),
+        event.messageID
+      );
+
+    } catch (err) {
+      console.log("SING ERROR:", err.message);
+      api.sendMessage(`❌ Failed to fetch audio. Reason: ${err.message}`, event.threadID, event.messageID);
+    }
+  },
+
+  onReply: async ({ event, api, Reply }) => {
+    try {
+      const { results, author } = Reply;
+      if (event.senderID !== author) return;
+
+      const choice = parseInt(event.body);
+      if (isNaN(choice) || choice < 1 || choice > results.length)
+        return api.sendMessage("❌ Enter valid number (1–6).", event.threadID, event.messageID);
+
+      const video = results[choice - 1];
+      const apiBase = String(global.GoatBot.config.Arafat?.api || "").trim();
+
+      if (!apiBase)
+        return api.sendMessage("❌ Error: API Base URL is empty!", event.threadID, event.messageID);
+
+      const finalURL = `${apiBase}/download/arafatadl?url=${encodeURIComponent(video.url)}`;
+
+      api.setMessageReaction("🌷", event.messageID, () => {}, true);
+
+      const res = await axios({
+        url: finalURL,
+        method: "GET",
+        responseType: "stream",
+        timeout: 0
+      });
+
+      if (res.status !== 200)
+        return api.sendMessage("❌ Download failed.", event.threadID, event.messageID);
+
+      await api.unsendMessage(Reply.messageID);
+
+      await api.sendMessage(
+        {
+          body:
+`╭───────────────❍
+│ 🎧 𝑫𝒐𝒘𝒏𝒍𝒐𝒂𝒅 𝑺𝒖𝒄𝒄𝒆𝒔𝒔
+├───────────────❍
+│ 🎵 ${video.title}
+╰───────────────❍`,
+          attachment: res.data
+        },
+        event.threadID,
+        () => api.setMessageReaction("🎀", event.messageID, () => {}, true),
+        event.messageID
+      );
+
+    } catch (err) {
+      console.log("REPLY ERROR:", err.message);
+      api.sendMessage(`❌ Download failed. Reason: ${err.message}`, event.threadID, event.messageID);
     }
   }
 };
